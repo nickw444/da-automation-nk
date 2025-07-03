@@ -1,0 +1,3 @@
+[submodule "docs/digital-alchemy"]
+	path = docs/digital-alchemy
+	url = https://github.com/Digital-Alchemy-TS/documentation.git
