@@ -1,7 +1,7 @@
 import { PICK_ENTITY } from "@digital-alchemy/hass";
-import { BaseDevice } from "./base_device";
+import { DeviceHelper, IBaseDevice } from "./base_device";
 
-export class DirectConsumptionDevice extends BaseDevice {
+export class DirectConsumptionDevice implements IBaseDevice {
   constructor(
     private readonly entityRef: PICK_ENTITY<"number" | "input_number">,
     private readonly consumptionEntityRef: PICK_ENTITY<"sensor">,
@@ -10,11 +10,10 @@ export class DirectConsumptionDevice extends BaseDevice {
     public readonly name: string,
     public readonly priority: number,
   ) {
-    super();
   }
 
   get minIncreaseCapacity(): number {
-    this.entityRef.attr;
+    return 0;
   }
   get maxIncreaseCapacity(): number {
     return 0;
@@ -32,11 +31,13 @@ export class DirectConsumptionDevice extends BaseDevice {
     return 0;
   }
 
-  protected doIncreaseConsumptionBy(amount: number): void {
+  increaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateIncreaseConsumptionBy(this, amount);
     // TODO: Implement direct consumption device control
   }
 
-  protected doDecreaseConsumptionBy(amount: number): void {
+  decreaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateDecreaseConsumptionBy(this, amount);
     // TODO: Implement direct consumption device control
   }
 

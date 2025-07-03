@@ -1,14 +1,13 @@
 import { PICK_ENTITY } from "@digital-alchemy/hass";
-import { BaseDevice } from "./base_device";
+import { DeviceHelper, IBaseDevice } from "./base_device";
 
-export class HumidifierDevice extends BaseDevice {
+export class HumidifierDevice implements IBaseDevice {
   constructor(
     private readonly entity_id: PICK_ENTITY<"humidifier">,
     private readonly consumption_entity_id: PICK_ENTITY<"sensor">,
     public readonly name: string,
     public readonly priority: number,
   ) {
-    super();
   }
 
   get minIncreaseCapacity(): number {
@@ -30,11 +29,17 @@ export class HumidifierDevice extends BaseDevice {
     return 0;
   }
 
-  protected doIncreaseConsumptionBy(amount: number): void {
+  increaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateIncreaseConsumptionBy(this, amount);
     // TODO: Implement humidifier device consumption control
   }
 
-  protected doDecreaseConsumptionBy(amount: number): void {
+  decreaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateDecreaseConsumptionBy(this, amount);
+    // TODO: Implement humidifier device consumption control
+  }
+  
+  stop(): void {
     // TODO: Implement humidifier device consumption control
   }
 

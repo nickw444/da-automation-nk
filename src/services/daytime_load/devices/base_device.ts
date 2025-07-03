@@ -1,56 +1,57 @@
-export abstract class BaseDevice {
+export interface IBaseDevice {
+  name: string;
+  priority: number;
+
   // Amount of energy that can still be allocated to this device to be consumed
-  abstract minIncreaseCapacity: number;
-  abstract maxIncreaseCapacity: number;
-  abstract minDecreaseCapacity: number;
-  abstract maxDecreaseCapacity: number;
+  minIncreaseCapacity: number;
+  maxIncreaseCapacity: number;
+  minDecreaseCapacity: number;
+  maxDecreaseCapacity: number;
 
-  abstract currentConsumption: number;
-  abstract expectedFutureConsumption: number;
+  currentConsumption: number;
+  expectedFutureConsumption: number;
 
-  abstract name: string;
-  abstract priority: number;
+  hasChangePending: "increase" | "decrease" | undefined;
+  
+  increaseConsumptionBy(amount: number): void;
+  decreaseConsumptionBy(amount: number): void;
+  stop(): void;
+}
 
-  abstract stop(): void;
-  protected abstract doIncreaseConsumptionBy(amount: number): void;
-  protected abstract doDecreaseConsumptionBy(amount: number): void;
-
-  increaseConsumptionBy(amount: number): void {
-    if (this.hasChangePending) {
+export class DeviceHelper {
+  static validateIncreaseConsumptionBy(device: IBaseDevice, amount: number) {
+     if (device.hasChangePending) {
       throw new Error(
-        `Cannot increase consumption for ${this.name}: change already pending`,
+        `Cannot increase consumption for ${device.name}: change already pending`,
       );
     }
-    if (amount < this.minIncreaseCapacity) {
+    if (amount < device.minIncreaseCapacity) {
       throw new Error(
-        `Cannot increase consumption for ${this.name}: amount ${amount} below minimum ${this.minIncreaseCapacity}`,
+        `Cannot increase consumption for ${device.name}: amount ${amount} below minimum ${device.minIncreaseCapacity}`,
       );
     }
-    if (amount > this.maxIncreaseCapacity) {
+    if (amount > device.maxIncreaseCapacity) {
       throw new Error(
-        `Cannot increase consumption for ${this.name}: amount ${amount} exceeds maximum ${this.maxIncreaseCapacity}`,
+        `Cannot increase consumption for ${device.name}: amount ${amount} exceeds maximum ${device.maxIncreaseCapacity}`,
       );
     }
-    this.doIncreaseConsumptionBy(amount);
   }
 
-  decreaseConsumptionBy(amount: number): void {
-    if (this.hasChangePending) {
+  static validateDecreaseConsumptionBy(device: IBaseDevice, amount: number) {
+    if (device.hasChangePending) {
       throw new Error(
-        `Cannot decrease consumption for ${this.name}: change already pending`,
+        `Cannot decrease consumption for ${device.name}: change already pending`,
       );
     }
-    if (amount < this.minDecreaseCapacity) {
+    if (amount < device.minDecreaseCapacity) {
       throw new Error(
-        `Cannot decrease consumption for ${this.name}: amount ${amount} below minimum ${this.minDecreaseCapacity}`,
+        `Cannot decrease consumption for ${device.name}: amount ${amount} below minimum ${device.minDecreaseCapacity}`,
       );
     }
-    if (amount > this.maxDecreaseCapacity) {
+    if (amount > device.maxDecreaseCapacity) {
       throw new Error(
-        `Cannot decrease consumption for ${this.name}: amount ${amount} exceeds maximum ${this.maxDecreaseCapacity}`,
+        `Cannot decrease consumption for ${device.name}: amount ${amount} exceeds maximum ${device.maxDecreaseCapacity}`,
       );
     }
-    this.doDecreaseConsumptionBy(amount);
   }
-  abstract hasChangePending: "increase" | "decrease" | undefined;
 }

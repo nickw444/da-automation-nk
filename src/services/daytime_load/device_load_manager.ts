@@ -2,13 +2,13 @@ import type { ILogger } from "@digital-alchemy/core";
 import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 import { Device } from "./devices/device";
 import { unwrapNumericState } from "./states_helpers";
-import { BaseDevice } from "./devices/base_device";
+import { IBaseDevice } from "./devices/base_device";
 
 export class DeviceLoadManager {
   private loopInterval: NodeJS.Timeout | undefined = undefined;
 
   constructor(
-    private readonly devices: BaseDevice[],
+    private readonly devices: IBaseDevice[],
     private readonly logger: ILogger,
     private readonly gridConsumptionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
     private readonly gridConsumptionSensorMean1m: ByIdProxy<

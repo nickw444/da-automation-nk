@@ -1,8 +1,9 @@
 import { TestRunner } from "@digital-alchemy/core";
 import { LIB_HASS } from "@digital-alchemy/hass";
 import { LIB_MOCK_ASSISTANT } from "@digital-alchemy/hass/mock-assistant";
-import { DeviceLoadManager } from "./device_load_manager";
-import { BaseDevice } from "./devices/base_device";
+import type { MockInstance } from "vitest";
+import { DeviceLoadManager } from "../device_load_manager";
+import { IBaseDevice } from "../devices/base_device";
 
 const runner = TestRunner()
   .appendLibrary(LIB_HASS)
@@ -810,7 +811,7 @@ describe("DeviceLoadManager", () => {
   });
 });
 
-class MockBaseDevice extends BaseDevice {
+class MockBaseDevice implements IBaseDevice {
   name: string;
   priority: number;
   currentConsumption: number;
@@ -821,10 +822,8 @@ class MockBaseDevice extends BaseDevice {
   maxDecreaseCapacity: number;
   hasChangePending: "increase" | "decrease" | undefined;
 
-  increaseConsumptionBy = vi.fn();
-  decreaseConsumptionBy = vi.fn();
-  doIncreaseConsumptionBySpy = vi.fn();
-  doDecreaseConsumptionBySpy = vi.fn();
+  increaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
+  decreaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
 
   constructor(
     overrides: {
@@ -839,7 +838,6 @@ class MockBaseDevice extends BaseDevice {
       hasChangePending?: "increase" | "decrease" | undefined;
     } = {},
   ) {
-    super();
     this.name = overrides.name || "Mock Device";
     this.priority = overrides.priority || 1;
     this.currentConsumption = overrides.currentConsumption || 0;
@@ -849,20 +847,17 @@ class MockBaseDevice extends BaseDevice {
     this.minDecreaseCapacity = overrides.minDecreaseCapacity || 0;
     this.maxDecreaseCapacity = overrides.maxDecreaseCapacity || 0;
     this.hasChangePending = overrides.hasChangePending || undefined;
+    
+    // Setup mock functions
+    this.increaseConsumptionBy = vi.fn();
+    this.decreaseConsumptionBy = vi.fn();
   }
-
-  protected doIncreaseConsumptionBy(amount: number): void {
-    this.doIncreaseConsumptionBySpy(amount);
-  }
-
-  protected doDecreaseConsumptionBy(amount: number): void {
-    this.doDecreaseConsumptionBySpy(amount);
+  stop(): void {
+    // Mock implementation - do nothing
   }
 
   resetSpies() {
     this.increaseConsumptionBy.mockClear();
     this.decreaseConsumptionBy.mockClear();
-    this.doIncreaseConsumptionBySpy.mockClear();
-    this.doDecreaseConsumptionBySpy.mockClear();
   }
 }

@@ -1,12 +1,12 @@
-import { ByIdProxy, Device, PICK_ENTITY } from "@digital-alchemy/hass";
-import { BaseDevice } from "./base_device";
+import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 import {
   ConsumptionTransitionState,
   ConsumptionTransitionStateMachine,
 } from "./consumption_transition_state_machine";
 import { unwrapNumericState } from "../states_helpers";
+import { DeviceHelper, IBaseDevice } from "./base_device";
 
-export class BooleanDevice extends BaseDevice {
+export class BooleanDevice implements IBaseDevice {
   private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
     new ConsumptionTransitionStateMachine();
 
@@ -19,7 +19,6 @@ export class BooleanDevice extends BaseDevice {
     public readonly name: string,
     public readonly priority: number,
   ) {
-    super();
   }
 
   get minIncreaseCapacity(): number {
@@ -79,7 +78,9 @@ export class BooleanDevice extends BaseDevice {
     );
   }
 
-  protected doIncreaseConsumptionBy(amount: number): void {
+  increaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateIncreaseConsumptionBy(this, amount);
+
     if (amount > 0 && this.entityRef.state === "off") {
       this.entityRef.turn_on();
       if (
@@ -96,7 +97,9 @@ export class BooleanDevice extends BaseDevice {
     }
   }
 
-  protected doDecreaseConsumptionBy(amount: number): void {
+  decreaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateDecreaseConsumptionBy(this, amount);
+
     if (amount > 0 && this.entityRef.state === "on") {
       this.entityRef.turn_off();
       if (

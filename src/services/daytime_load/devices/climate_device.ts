@@ -1,5 +1,5 @@
 import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
-import { BaseDevice } from "./base_device";
+import { DeviceHelper, IBaseDevice } from "./base_device";
 import {
   ConsumptionTransitionState,
   ConsumptionTransitionStateMachine,
@@ -72,7 +72,7 @@ export class ClimateHassControls implements IClimateHassControls {
   }
 }
 
-export class ClimateDevice extends BaseDevice {
+export class ClimateDevice implements IBaseDevice {
   private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
     new ConsumptionTransitionStateMachine();
   private _expectedFutureConsumption: number | undefined = undefined;
@@ -90,7 +90,6 @@ export class ClimateDevice extends BaseDevice {
     public readonly priority: number,
     private readonly hassControls: IClimateHassControls,
   ) {
-    super();
   }
 
   get minIncreaseCapacity(): number {
@@ -193,7 +192,9 @@ export class ClimateDevice extends BaseDevice {
     }
   }
 
-  protected doIncreaseConsumptionBy(amount: number): void {
+  increaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateIncreaseConsumptionBy(this, amount);
+
     if (amount > 0 && this.entityRef.state === "off") {
       if (
         this.consumptionTransitionStateMachine.transitionTo(
@@ -257,7 +258,9 @@ export class ClimateDevice extends BaseDevice {
     }
   }
 
-  protected doDecreaseConsumptionBy(amount: number): void {
+  decreaseConsumptionBy(amount: number): void {
+    DeviceHelper.validateDecreaseConsumptionBy(this, amount);
+
     if (amount >= this.currentConsumption && this.entityRef.state !== "off") {
       this.entityRef.turn_off();
     }
