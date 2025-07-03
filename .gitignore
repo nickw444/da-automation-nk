@@ -1,0 +1,10 @@
+build
+node_modules
+.env
+
+# DigitalAlchemy Fixtures: Generate these prior to building
+# $> npx @digital-alchemy/type-writer 
+# $> node node_modules/@digital-alchemy/hass/dist/mock_assistant/main.mjs
+synapse_storage.db
+fixtures.json
+src/hass/*.mts
