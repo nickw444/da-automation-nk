@@ -856,6 +856,10 @@ class MockBaseDevice implements IBaseDevice {
     // Mock implementation - do nothing
   }
 
+  canChangeConsumption(): boolean {
+    return true;
+  }
+
   resetSpies() {
     this.increaseConsumptionBy.mockClear();
     this.decreaseConsumptionBy.mockClear();

@@ -9,6 +9,7 @@ import { DeviceHelper, IBaseDevice } from "./base_device";
 export class BooleanDevice implements IBaseDevice {
   private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
     new ConsumptionTransitionStateMachine();
+  private unlockedTime: number = 0;
 
   constructor(
     private readonly entityRef: ByIdProxy<
@@ -18,11 +19,14 @@ export class BooleanDevice implements IBaseDevice {
     private readonly expectedConsumption: number, // Expected power consumption in watts
     public readonly name: string,
     public readonly priority: number,
+    private readonly offToOnDebounceMs: number,
+    private readonly onToOffDebounceMs: number,
   ) {
   }
 
   get minIncreaseCapacity(): number {
     if (this.entityRef.state === "on") {
+      // When already on, we can't increase consumption
       return 0;
     }
     return (
@@ -32,6 +36,7 @@ export class BooleanDevice implements IBaseDevice {
   }
   get maxIncreaseCapacity(): number {
     if (this.entityRef.state === "on") {
+      // When already on, we can't increase consumption
       return 0;
     }
     return (
@@ -41,6 +46,7 @@ export class BooleanDevice implements IBaseDevice {
   }
   get minDecreaseCapacity(): number {
     if (this.entityRef.state === "off") {
+      // When already off, we can't decrease consumption
       return 0;
     }
     return (
@@ -50,6 +56,7 @@ export class BooleanDevice implements IBaseDevice {
   }
   get maxDecreaseCapacity(): number {
     if (this.entityRef.state === "off") {
+      // When already off, we can't decrease consumption
       return 0;
     }
     return (
@@ -78,11 +85,32 @@ export class BooleanDevice implements IBaseDevice {
     );
   }
 
+  canChangeConsumption(): boolean {
+    return Date.now() >= this.unlockedTime;
+  }
+
+  private recordStateChange(newState: "on" | "off"): void {
+    const now = Date.now();
+    if (newState === "on") {
+      // After turning on, unlock after onToOffDebounceMs
+      this.unlockedTime = now + this.onToOffDebounceMs;
+    } else {
+      // After turning off, unlock after offToOnDebounceMs
+      this.unlockedTime = now + this.offToOnDebounceMs;
+    }
+  }
+
   increaseConsumptionBy(amount: number): void {
     DeviceHelper.validateIncreaseConsumptionBy(this, amount);
 
     if (amount > 0 && this.entityRef.state === "off") {
+      if (!this.canChangeConsumption()) {
+        return;
+      }
+
       this.entityRef.turn_on();
+      this.recordStateChange("on");
+      
       if (
         this.consumptionTransitionStateMachine.transitionTo(
           ConsumptionTransitionState.INCREASE_PENDING,
@@ -101,7 +129,13 @@ export class BooleanDevice implements IBaseDevice {
     DeviceHelper.validateDecreaseConsumptionBy(this, amount);
 
     if (amount > 0 && this.entityRef.state === "on") {
+      if (!this.canChangeConsumption()) {
+        return;
+      }
+
       this.entityRef.turn_off();
+      this.recordStateChange("off");
+      
       if (
         this.consumptionTransitionStateMachine.transitionTo(
           ConsumptionTransitionState.DECREASE_PENDING,
@@ -133,6 +167,7 @@ export class BooleanDevice implements IBaseDevice {
 
   stop(): void {
     this.entityRef.turn_off();
+    this.recordStateChange("off");
     this.consumptionTransitionStateMachine.transitionTo(
       ConsumptionTransitionState.IDLE,
     );

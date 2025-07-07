@@ -35,7 +35,7 @@ export class DeviceLoadManager {
   }
 
   private readonly loop = () => {
-    this.logger.info("Running device load management loop");
+    this.logger.debug("Running device load management loop");
     const gridConsumption = unwrapNumericState(
       this.gridConsumptionSensorMean1m.state,
     );
@@ -49,13 +49,13 @@ export class DeviceLoadManager {
     // Bangbang control logic
     if (gridConsumption > this.maxConsumptionBeforeSheddingLoad) {
       // Too much consumption - shed load
-      this.logger.info(
+      this.logger.debug(
         `Grid consumption ${gridConsumption} W exceeds max ${this.maxConsumptionBeforeSheddingLoad} W, shedding load`,
       );
       this.shedLoad(gridConsumption - this.desiredGridConsumption);
     } else if (gridConsumption < this.minConsumptionBeforeAddingLoad) {
       // Surplus production - add load
-      this.logger.info(
+      this.logger.debug(
         `Grid consumption ${gridConsumption} W is below min ${this.minConsumptionBeforeAddingLoad} W, adding load`,
       );
       this.addLoad(this.desiredGridConsumption - gridConsumption);
@@ -138,6 +138,12 @@ export class DeviceLoadManager {
 
       const availableIncrease = device.maxIncreaseCapacity;
       if (availableIncrease > 0) {
+        // Check if device can change state (e.g., debounce timing)
+        if (!device.canChangeConsumption()) {
+          this.logger.debug(`Skipping ${device.name} - cannot change state`);
+          continue;
+        }
+
         const increaseAmount = Math.min(availableIncrease, remainingToAdd);
 
         // Check if the increase amount meets the minimum required increase
@@ -153,10 +159,6 @@ export class DeviceLoadManager {
       }
     }
 
-    if (remainingToAdd > 0) {
-      this.logger.info(
-        `Could not add all surplus load, ${remainingToAdd} W remaining`,
-      );
-    }
+
   }
 }

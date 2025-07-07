@@ -28,6 +28,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // When device is off, it can increase consumption
@@ -60,6 +62,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // When device is on, it cannot increase consumption
@@ -92,6 +96,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Spy on the service call
@@ -130,6 +136,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Spy on the service call
@@ -168,6 +176,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Spy on the service call
@@ -206,6 +216,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Spy on the service call
@@ -244,6 +256,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Test current consumption
@@ -271,6 +285,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Trigger increase to put device in pending state
@@ -301,6 +317,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // Trigger decrease to put device in pending state
@@ -331,6 +349,8 @@ describe("BooleanDevice", () => {
           50,
           "Test Device",
           1,
+          30000, // offToOnDebounceMs
+          10000, // onToOffDebounceMs
         );
 
         // When sensor returns null, should fallback to expectedConsumption for capacity
@@ -366,6 +386,8 @@ describe("BooleanDevice", () => {
             50,
             "Test Device",
             1,
+            30000, // offToOnDebounceMs
+            10000, // onToOffDebounceMs
           );
 
           // Call increaseConsumptionBy to trigger state machine transition

@@ -1,6 +1,5 @@
 import type { TServiceParams } from "@digital-alchemy/core";
 import { BooleanDevice } from "./devices/boolean_device";
-import { ClimateDevice } from "./devices/climate_device";
 import { Device } from "./devices/device";
 import { PICK_ENTITY } from "@digital-alchemy/hass";
 
@@ -16,12 +15,19 @@ type BooleanDeviceConfig = {
   entityId: PICK_ENTITY<"switch">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
   expectedConsumption: number; // Expected power consumption in watts
+  offToOnDebounceMs: number; // Debounce time from OFF to ON in milliseconds
+  onToOffDebounceMs: number; // Debounce time from ON to OFF in milliseconds
 };
 
 type ClimateDeviceConfig = {
   kind: "climate";
   entityId: PICK_ENTITY<"climate">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
+  fanOnlyExpectedConsumption: number;
+  heatMinExpectedConsumption: number;
+  coolMinExpectedConsumption: number;
+  heatMaxExpectedConsumption: number;
+  coolMaxExpectedConsumption: number;
 };
 
 type HumidifierDeviceConfig = {
@@ -76,24 +82,33 @@ const devices: DeviceConfig[] = [
     entityId: "switch.subfloor_fan",
     consumptionEntityId: "sensor.subfloor_fan_current_consumption",
     expectedConsumption: 50,
-    priority: 1,
+    priority: 2,
     name: "Subfloor Fan",
+    offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+    onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
   },
   {
     kind: "boolean",
     entityId: "switch.towel_rail",
     consumptionEntityId: "sensor.towel_rail_current_consumption",
     expectedConsumption: 80,
-    priority: 2,
+    priority: 3,
     name: "Towel Rail",
+    offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+    onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
   },
-  // {
-  //     kind: 'climate',
-  //     entityId: "climate.hallway",
-  //     consumptionEntityId: "sensor.air_conditioning_power",
-  //     priority: 3,
-  //     name: "Hallway Climate"
-  // }
+  {
+    kind: "climate",
+    entityId: "climate.hallway",
+    consumptionEntityId: "sensor.air_conditioning_power",
+    priority: 1,
+    name: "Hallway Climate",
+    fanOnlyExpectedConsumption: 50,
+    heatMinExpectedConsumption: 300,
+    coolMinExpectedConsumption: 300,
+    heatMaxExpectedConsumption: 2200,
+    coolMaxExpectedConsumption: 2200,
+  },
 ];
 
 export const config: Config = {

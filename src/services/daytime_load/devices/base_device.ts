@@ -2,7 +2,6 @@ export interface IBaseDevice {
   name: string;
   priority: number;
 
-  // Amount of energy that can still be allocated to this device to be consumed
   minIncreaseCapacity: number;
   maxIncreaseCapacity: number;
   minDecreaseCapacity: number;
@@ -12,7 +11,8 @@ export interface IBaseDevice {
   expectedFutureConsumption: number;
 
   hasChangePending: "increase" | "decrease" | undefined;
-  
+
+  canChangeConsumption(): boolean;
   increaseConsumptionBy(amount: number): void;
   decreaseConsumptionBy(amount: number): void;
   stop(): void;
@@ -20,9 +20,14 @@ export interface IBaseDevice {
 
 export class DeviceHelper {
   static validateIncreaseConsumptionBy(device: IBaseDevice, amount: number) {
-     if (device.hasChangePending) {
+    if (device.hasChangePending) {
       throw new Error(
         `Cannot increase consumption for ${device.name}: change already pending`,
+      );
+    }
+    if (!device.canChangeConsumption()) {
+      throw new Error(
+        `Cannot increase consumption for ${device.name}: device cannot change consumption`,
       );
     }
     if (amount < device.minIncreaseCapacity) {
@@ -41,6 +46,11 @@ export class DeviceHelper {
     if (device.hasChangePending) {
       throw new Error(
         `Cannot decrease consumption for ${device.name}: change already pending`,
+      );
+    }
+    if (!device.canChangeConsumption()) {
+      throw new Error(
+        `Cannot decrease consumption for ${device.name}: device cannot change consumption`,
       );
     }
     if (amount < device.minDecreaseCapacity) {

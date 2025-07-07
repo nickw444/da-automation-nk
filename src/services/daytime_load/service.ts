@@ -37,6 +37,8 @@ export function DaytimeLoadService({
               deviceConfig.expectedConsumption,
               deviceConfig.name,
               deviceConfig.priority,
+              deviceConfig.offToOnDebounceMs,
+              deviceConfig.onToOffDebounceMs,
             );
           default:
             logger.error(`Unsupported device kind: ${deviceConfig.kind}`);
@@ -61,8 +63,16 @@ export function DaytimeLoadService({
       appConfig.minConsumptionBeforeAddingLoad,
     );
 
+    const systemStatusSensor = synapse.binary_sensor({
+      context,
+      name: "Daytime Load Management Active",
+      device_class: "running",
+      unique_id: "daytime_load_management_active",
+    });
+
     stateManager.onSystemStateChange((newState) => {
       logger.info(`System state changed to ${newState}`);
+      systemStatusSensor.is_on = newState === "RUNNING";
       if (newState === "RUNNING") {
         loadManager.start();
       } else {

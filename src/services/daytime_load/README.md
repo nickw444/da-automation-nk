@@ -60,7 +60,12 @@ Devices are configured in [`config.ts`](file:///Users/nickw/repos/home/home-assi
 The service consists of several key components:
 
 - **[`service.ts`](./service.ts)** - Main orchestration and decision logic
-- **[`device_load_manager.ts`](./device_load_manager.ts)** - Individual device control and state management
+- **[`device_load_manager.ts`](./device_load_manager.ts)** - Centralised device control and state management
+- **[`*_device.ts`](./_device.ts)** - Individual device control and state management for different device types
+
+### `device_load_manager.ts`
+
+<TODO>: Explain high level load management algorithm </TODO>
 
 ## Benefits
 
@@ -69,32 +74,21 @@ The service consists of several key components:
 - **Reduces electricity costs** by using free solar energy
 - **Provides detailed monitoring** and logging for optimization
 
+## Future Improvements
 
-## TODO/Ideas:
+### Additional Device Support
 
-* Dynamic priorities
-    * Min/Max time per day
-    * Priority based on time of day
+- Setpoint Based Devices
+  - Air Conditioners (Climate - Heat/Cool/Fan)
+  - Dehumidifier (Humidity Setpoint/Fan)
+- Direct Consumption Devices (e.g. EV Charger with "Charging Current" control)
 
+### General Features
 
-What if:
+- Dynamic priorities
+  - Min/Max runtime per day
+  - Priority based on time of day
+- Predictive scheduling
+  - Based on solar production forecast
+  - Based on weather forecast
 
-- Service tells device "desired consumption" (within dev advertised range of consumption)
-- Device "self-optimises" to consumption. (Internal PID loop or other control method)
-
-- Get current load / excess
-- Compare current load to desired consumption
-
-
-Device priorities mean that we have an order of devices;
-
-- 1. climate.hallway 
-- 2. humidifier.dehumidifier
-- 3. Subfloor Fan
-- 4. Towel Rail
-- 5. EV charger
-
-
-Waterfall based allocation; so if excess, climate.hallway will either be on full consumption, or partially on.
-
-- Situation where devices actual consumption does not reflect the true range. e.g. Air conditioner might be set to highest setpoint or hit user desired setpoint, and therefore is unable to consume any more energy.
