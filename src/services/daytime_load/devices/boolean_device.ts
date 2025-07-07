@@ -24,69 +24,52 @@ export class BooleanDevice implements IBaseDevice {
   ) {
   }
 
-  get minIncreaseCapacity(): number {
+  get increaseIncrements(): number[] {
     if (this.entityRef.state === "on") {
       // When already on, we can't increase consumption
-      return 0;
+      return [];
     }
-    return (
-      unwrapNumericState(this.consumptionEntityRef.state) ||
-      this.expectedConsumption
-    );
+    // For off device, use expectedConsumption (don't rely on sensor when off)
+    return [this.expectedConsumption];
   }
-  get maxIncreaseCapacity(): number {
-    if (this.entityRef.state === "on") {
-      // When already on, we can't increase consumption
-      return 0;
-    }
-    return (
-      unwrapNumericState(this.consumptionEntityRef.state) ||
-      this.expectedConsumption
-    );
-  }
-  get minDecreaseCapacity(): number {
+
+  get decreaseIncrements(): number[] {
     if (this.entityRef.state === "off") {
       // When already off, we can't decrease consumption
-      return 0;
+      return [];
     }
-    return (
-      unwrapNumericState(this.consumptionEntityRef.state) ||
-      this.expectedConsumption
-    );
-  }
-  get maxDecreaseCapacity(): number {
-    if (this.entityRef.state === "off") {
-      // When already off, we can't decrease consumption
-      return 0;
-    }
-    return (
-      unwrapNumericState(this.consumptionEntityRef.state) ||
-      this.expectedConsumption
-    );
+    // For on device, use actual consumption from sensor, fallback to expected
+    const consumption = unwrapNumericState(this.consumptionEntityRef.state) || this.expectedConsumption;
+    return [consumption];
   }
   get currentConsumption(): number {
     return unwrapNumericState(this.consumptionEntityRef.state) || 0;
   }
 
-  get expectedFutureConsumption(): number {
+  get changeState():
+    | { type: "increase" | "decrease", expectedFutureConsumption: number }
+    | { type: "debounce" }
+    | undefined {
+    
+    // First check for pending state transitions (these take priority)
     if (
       this.consumptionTransitionStateMachine.state ===
       ConsumptionTransitionState.INCREASE_PENDING
     ) {
-      return this.expectedConsumption;
+      return { type: "increase", expectedFutureConsumption: this.expectedConsumption };
     } else if (
       this.consumptionTransitionStateMachine.state ===
       ConsumptionTransitionState.DECREASE_PENDING
     ) {
-      return 0;
+      return { type: "decrease", expectedFutureConsumption: 0 };
     }
-    throw new Error(
-      "Cannot get expectedFutureConsumption with no pending change",
-    );
-  }
-
-  canChangeConsumption(): boolean {
-    return Date.now() >= this.unlockedTime;
+    
+    // Then check if we're in debounce period (only when no pending change)
+    if (Date.now() < this.unlockedTime) {
+      return { type: "debounce" };
+    }
+    
+    return undefined;
   }
 
   private recordStateChange(newState: "on" | "off"): void {
@@ -101,13 +84,14 @@ export class BooleanDevice implements IBaseDevice {
   }
 
   increaseConsumptionBy(amount: number): void {
+    // Check for debounce - return silently if in debounce period
+    if (this.changeState?.type === "debounce") {
+      return;
+    }
+
     DeviceHelper.validateIncreaseConsumptionBy(this, amount);
 
     if (amount > 0 && this.entityRef.state === "off") {
-      if (!this.canChangeConsumption()) {
-        return;
-      }
-
       this.entityRef.turn_on();
       this.recordStateChange("on");
       
@@ -126,13 +110,14 @@ export class BooleanDevice implements IBaseDevice {
   }
 
   decreaseConsumptionBy(amount: number): void {
+    // Check for debounce - return silently if in debounce period
+    if (this.changeState?.type === "debounce") {
+      return;
+    }
+
     DeviceHelper.validateDecreaseConsumptionBy(this, amount);
 
     if (amount > 0 && this.entityRef.state === "on") {
-      if (!this.canChangeConsumption()) {
-        return;
-      }
-
       this.entityRef.turn_off();
       this.recordStateChange("off");
       
@@ -150,20 +135,7 @@ export class BooleanDevice implements IBaseDevice {
     }
   }
 
-  get hasChangePending(): "increase" | "decrease" | undefined {
-    if (
-      this.consumptionTransitionStateMachine.state ===
-      ConsumptionTransitionState.INCREASE_PENDING
-    ) {
-      return "increase";
-    } else if (
-      this.consumptionTransitionStateMachine.state ===
-      ConsumptionTransitionState.DECREASE_PENDING
-    ) {
-      return "decrease";
-    }
-    return undefined;
-  }
+
 
   stop(): void {
     this.entityRef.turn_off();

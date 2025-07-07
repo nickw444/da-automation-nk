@@ -8,7 +8,7 @@ const runner = TestRunner()
   .appendLibrary(LIB_MOCK_ASSISTANT);
 
 describe("BooleanDevice", () => {
-  it("should return correct capacity when entity is off", async () => {
+  it("should return correct increments when entity is off", async () => {
     await runner
       .bootLibrariesFirst()
       .setup(({ mock_assistant }) => {
@@ -33,16 +33,14 @@ describe("BooleanDevice", () => {
         );
 
         // When device is off, it can increase consumption
-        expect(device.minIncreaseCapacity).toBe(50); // falls back to expectedConsumption
-        expect(device.maxIncreaseCapacity).toBe(50); // falls back to expectedConsumption
+        expect(device.increaseIncrements).toEqual([50]); // falls back to expectedConsumption
 
         // When device is off, it cannot decrease consumption
-        expect(device.minDecreaseCapacity).toBe(0);
-        expect(device.maxDecreaseCapacity).toBe(0);
+        expect(device.decreaseIncrements).toEqual([]);
       });
   });
 
-  it("should return correct capacity when entity is on", async () => {
+  it("should return correct increments when entity is on", async () => {
     await runner
       .bootLibrariesFirst()
       .setup(({ mock_assistant }) => {
@@ -67,12 +65,10 @@ describe("BooleanDevice", () => {
         );
 
         // When device is on, it cannot increase consumption
-        expect(device.minIncreaseCapacity).toBe(0);
-        expect(device.maxIncreaseCapacity).toBe(0);
+        expect(device.increaseIncrements).toEqual([]);
 
         // When device is on, it can decrease consumption
-        expect(device.minDecreaseCapacity).toBe(45); // actual consumption
-        expect(device.maxDecreaseCapacity).toBe(45); // actual consumption
+        expect(device.decreaseIncrements).toEqual([45]); // actual consumption
       });
   });
 
@@ -112,7 +108,7 @@ describe("BooleanDevice", () => {
         });
 
         // Verify state machine is in INCREASE_PENDING state
-        expect(device.hasChangePending).toBe("increase");
+        expect(device.changeState?.type).toBe("increase");
       });
   });
 
@@ -152,7 +148,7 @@ describe("BooleanDevice", () => {
         });
 
         // Verify state machine is in DECREASE_PENDING state
-        expect(device.hasChangePending).toBe("decrease");
+        expect(device.changeState?.type).toBe("decrease");
       });
   });
 
@@ -183,16 +179,16 @@ describe("BooleanDevice", () => {
         // Spy on the service call
         const turnOnSpy = vi.spyOn(hass.call.switch, "turn_on");
 
-        // When device is already on, max increase capacity is 0, so calling increaseConsumptionBy should throw
+        // When device is already on, increase increments is [], so calling increaseConsumptionBy should throw
         expect(() => device.increaseConsumptionBy(10)).toThrow(
-          "Cannot increase consumption for Test Device: amount 10 exceeds maximum 0",
+          "Cannot increase consumption for Test Device: amount 10 W not in valid increments []",
         );
 
         // Verify turn_on was NOT called
         expect(turnOnSpy).not.toHaveBeenCalled();
 
         // Verify no change is pending
-        expect(device.hasChangePending).toBeUndefined();
+        expect(device.changeState).toBeUndefined();
       });
   });
 
@@ -223,16 +219,16 @@ describe("BooleanDevice", () => {
         // Spy on the service call
         const turnOffSpy = vi.spyOn(hass.call.switch, "turn_off");
 
-        // When device is already off, max decrease capacity is 0, so calling decreaseConsumptionBy should throw
+        // When device is already off, decrease increments is [], so calling decreaseConsumptionBy should throw
         expect(() => device.decreaseConsumptionBy(10)).toThrow(
-          "Cannot decrease consumption for Test Device: amount 10 exceeds maximum 0",
+          "Cannot decrease consumption for Test Device: amount 10 W not in valid increments []",
         );
 
         // Verify turn_off was NOT called
         expect(turnOffSpy).not.toHaveBeenCalled();
 
         // Verify no change is pending
-        expect(device.hasChangePending).toBeUndefined();
+        expect(device.changeState).toBeUndefined();
       });
   });
 
@@ -293,7 +289,11 @@ describe("BooleanDevice", () => {
         device.increaseConsumptionBy(50);
 
         // Test expected future consumption when increase is pending
-        expect(device.expectedFutureConsumption).toBe(50);
+        const changeState = device.changeState;
+        expect(changeState?.type).toBe("increase");
+        if (changeState?.type === "increase") {
+          expect(changeState.expectedFutureConsumption).toBe(50);
+        }
       });
   });
 
@@ -325,7 +325,11 @@ describe("BooleanDevice", () => {
         device.decreaseConsumptionBy(45);
 
         // Test expected future consumption when decrease is pending
-        expect(device.expectedFutureConsumption).toBe(0);
+        const changeState = device.changeState;
+        expect(changeState?.type).toBe("decrease");
+        if (changeState?.type === "decrease") {
+          expect(changeState.expectedFutureConsumption).toBe(0);
+        }
       });
   });
 
@@ -353,9 +357,8 @@ describe("BooleanDevice", () => {
           10000, // onToOffDebounceMs
         );
 
-        // When sensor returns null, should fallback to expectedConsumption for capacity
-        expect(device.minIncreaseCapacity).toBe(50);
-        expect(device.maxIncreaseCapacity).toBe(50);
+        // When sensor returns null, should fallback to expectedConsumption for increments
+        expect(device.increaseIncrements).toEqual([50]);
 
         // Current consumption should return 0 when sensor is null
         expect(device.currentConsumption).toBe(0);
@@ -394,13 +397,14 @@ describe("BooleanDevice", () => {
           device.increaseConsumptionBy(50);
 
           // Verify state machine is in INCREASE_PENDING state
-          expect(device.hasChangePending).toBe("increase");
+          expect(device.changeState?.type).toBe("increase");
 
           // Advance timers by 1000ms to trigger timeout
           vi.advanceTimersByTime(1000);
 
-          // Verify state machine is back to IDLE
-          expect(device.hasChangePending).toBeUndefined();
+          // Verify state machine is back to IDLE (no longer increase pending)
+          // but device is still in debounce period since onToOffDebounceMs is 10000ms
+          expect(device.changeState?.type).toBe("debounce");
         });
     } finally {
       // Always restore real timers

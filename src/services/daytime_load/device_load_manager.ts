@@ -78,24 +78,31 @@ export class DeviceLoadManager {
     for (const device of sortedDevices) {
       if (remainingToShed <= 0) break;
 
-      // Skip if device has pending changes
-      if (device.hasChangePending) {
+      // Skip if device has pending changes or is in debounce
+      const changeState = device.changeState;
+      if (changeState?.type === "increase" || changeState?.type === "decrease") {
         this.logger.debug(`Skipping ${device.name} - has pending changes`);
         continue;
       }
+      if (changeState?.type === "debounce") {
+        this.logger.debug(`Skipping ${device.name} - in debounce period`);
+        continue;
+      }
 
-      const availableDecrease = device.maxDecreaseCapacity;
-      if (availableDecrease > 0) {
-        const decreaseAmount = Math.min(availableDecrease, remainingToShed);
+      const decreaseIncrements = device.decreaseIncrements;
+      if (decreaseIncrements.length > 0) {
+        // Find the best fitting increment that doesn't exceed remainingToShed
+        const suitableIncrement = decreaseIncrements
+          .filter(increment => increment <= remainingToShed)
+          .sort((a, b) => b - a)[0]; // Pick the largest suitable increment
 
-        // Check if the decrease amount meets the minimum required decrease
-        if (decreaseAmount >= device.minDecreaseCapacity) {
-          this.logger.info(`Shedding ${decreaseAmount} W from ${device.name}`);
-          device.decreaseConsumptionBy(decreaseAmount);
-          remainingToShed -= decreaseAmount;
+        if (suitableIncrement !== undefined) {
+          this.logger.info(`Shedding ${suitableIncrement} W from ${device.name}`);
+          device.decreaseConsumptionBy(suitableIncrement);
+          remainingToShed -= suitableIncrement;
         } else {
           this.logger.debug(
-            `Skipping ${device.name} - decrease amount ${decreaseAmount} W is below minimum ${device.minDecreaseCapacity} W`,
+            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.join(', ')}] W, needed: ≤${remainingToShed} W)`,
           );
         }
       }
@@ -116,49 +123,54 @@ export class DeviceLoadManager {
 
     let remainingToAdd = surplusCapacity;
 
+    // First, account for all pending increases across all devices
+    for (const device of sortedDevices) {
+      const changeState = device.changeState;
+      if (changeState?.type === "increase") {
+        const additionalConsumption =
+          changeState.expectedFutureConsumption - device.currentConsumption;
+        this.logger.debug(
+          `${device.name} has pending increase, accounting for ${additionalConsumption} W additional consumption (${changeState.expectedFutureConsumption} W future - ${device.currentConsumption} W current)`,
+        );
+        remainingToAdd -= additionalConsumption;
+      }
+    }
+
     for (const device of sortedDevices) {
       if (remainingToAdd <= 0) break;
 
-      // Check if device has pending changes
-      const pendingChange = device.hasChangePending;
-      if (pendingChange === "increase") {
-        // Device is already turning on, account for its additional future consumption
-        const additionalConsumption =
-          device.expectedFutureConsumption - device.currentConsumption;
-        this.logger.debug(
-          `${device.name} has pending increase, accounting for ${additionalConsumption} W additional consumption (${device.expectedFutureConsumption} W future - ${device.currentConsumption} W current)`,
-        );
-        remainingToAdd -= additionalConsumption;
+      // Check if device has pending changes or is in debounce
+      const changeState = device.changeState;
+      if (changeState?.type === "increase") {
+        // Device is already turning on, skip it
+        this.logger.debug(`Skipping ${device.name} - has pending increase`);
         continue;
-      } else if (pendingChange === "decrease") {
+      } else if (changeState?.type === "decrease") {
         // Device is turning off, skip it
         this.logger.debug(`Skipping ${device.name} - has pending decrease`);
         continue;
+      } else if (changeState?.type === "debounce") {
+        this.logger.debug(`Skipping ${device.name} - in debounce period`);
+        continue;
       }
 
-      const availableIncrease = device.maxIncreaseCapacity;
-      if (availableIncrease > 0) {
-        // Check if device can change state (e.g., debounce timing)
-        if (!device.canChangeConsumption()) {
-          this.logger.debug(`Skipping ${device.name} - cannot change state`);
-          continue;
-        }
+      const increaseIncrements = device.increaseIncrements;
+      if (increaseIncrements.length > 0) {
+        // Find the best fitting increment that doesn't exceed remainingToAdd
+        const suitableIncrement = increaseIncrements
+          .filter(increment => increment <= remainingToAdd)
+          .sort((a, b) => b - a)[0]; // Pick the largest suitable increment
 
-        const increaseAmount = Math.min(availableIncrease, remainingToAdd);
-
-        // Check if the increase amount meets the minimum required increase
-        if (increaseAmount >= device.minIncreaseCapacity) {
-          this.logger.info(`Adding ${increaseAmount} W to ${device.name}`);
-          device.increaseConsumptionBy(increaseAmount);
-          remainingToAdd -= increaseAmount;
+        if (suitableIncrement !== undefined) {
+          this.logger.info(`Adding ${suitableIncrement} W to ${device.name}`);
+          device.increaseConsumptionBy(suitableIncrement);
+          remainingToAdd -= suitableIncrement;
         } else {
           this.logger.debug(
-            `Skipping ${device.name} - increase amount ${increaseAmount} W is below minimum ${device.minIncreaseCapacity} W`,
+            `Skipping ${device.name} - no suitable increment (available: [${increaseIncrements.join(', ')}] W, needed: ≤${remainingToAdd} W)`,
           );
         }
       }
     }
-
-
   }
 }

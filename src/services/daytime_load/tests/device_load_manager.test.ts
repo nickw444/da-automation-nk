@@ -87,7 +87,7 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device to have capacity for shedding
             mockDevice.currentConsumption = 50;
-            mockDevice.maxDecreaseCapacity = 50;
+            mockDevice.setDecreaseIncrements([50]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -137,22 +137,16 @@ describe("DeviceLoadManager", () => {
               name: "Low Priority Device",
               priority: 5,
               currentConsumption: 50,
-              expectedFutureConsumption: 50,
-              minIncreaseCapacity: 0,
-              maxIncreaseCapacity: 0,
-              minDecreaseCapacity: 50,
-              maxDecreaseCapacity: 50,
+              increaseIncrements: [],
+              decreaseIncrements: [50],
             });
 
             const highPriorityDevice = new MockBaseDevice({
               name: "High Priority Device",
               priority: 1,
               currentConsumption: 50,
-              expectedFutureConsumption: 50,
-              minIncreaseCapacity: 0,
-              maxIncreaseCapacity: 0,
-              minDecreaseCapacity: 50,
-              maxDecreaseCapacity: 50,
+              increaseIncrements: [],
+              decreaseIncrements: [50],
             });
 
             const manager = new DeviceLoadManager(
@@ -202,10 +196,9 @@ describe("DeviceLoadManager", () => {
               "sensor.inverter_meter_power_mean_1m",
             );
 
-            // Configure mock device with range between min and max capacity
+            // Configure mock device with decrease increments
             mockDevice.currentConsumption = 80;
-            mockDevice.minDecreaseCapacity = 10;
-            mockDevice.maxDecreaseCapacity = 80;
+            mockDevice.setDecreaseIncrements([10, 20, 30, 40, 50, 60, 70, 80]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -252,8 +245,8 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device with pending changes
             mockDevice.currentConsumption = 50;
-            mockDevice.maxDecreaseCapacity = 50;
-            mockDevice.hasChangePending = "increase";
+            mockDevice.setDecreaseIncrements([50]);
+            mockDevice.setChangeState({ type: "increase", expectedFutureConsumption: 75 });
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -302,8 +295,7 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device to have capacity for adding
             mockDevice.currentConsumption = 0;
-            mockDevice.minIncreaseCapacity = 50;
-            mockDevice.maxIncreaseCapacity = 50;
+            mockDevice.setIncreaseIncrements([50]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -353,22 +345,16 @@ describe("DeviceLoadManager", () => {
               name: "Low Priority Device",
               priority: 5,
               currentConsumption: 0,
-              expectedFutureConsumption: 0,
-              minIncreaseCapacity: 50,
-              maxIncreaseCapacity: 50,
-              minDecreaseCapacity: 0,
-              maxDecreaseCapacity: 0,
+              increaseIncrements: [50],
+              decreaseIncrements: [],
             });
 
             const highPriorityDevice = new MockBaseDevice({
               name: "High Priority Device",
               priority: 1,
               currentConsumption: 0,
-              expectedFutureConsumption: 0,
-              minIncreaseCapacity: 50,
-              maxIncreaseCapacity: 50,
-              minDecreaseCapacity: 0,
-              maxDecreaseCapacity: 0,
+              increaseIncrements: [50],
+              decreaseIncrements: [],
             });
 
             const manager = new DeviceLoadManager(
@@ -419,10 +405,9 @@ describe("DeviceLoadManager", () => {
               "sensor.inverter_meter_power_mean_1m",
             );
 
-            // Configure mock device with range between min and max capacity
+            // Configure mock device with increase increments
             mockDevice.currentConsumption = 0;
-            mockDevice.minIncreaseCapacity = 10;
-            mockDevice.maxIncreaseCapacity = 80;
+            mockDevice.setIncreaseIncrements([10, 20, 30, 40, 50, 60, 70, 80]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -469,8 +454,8 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device with pending decrease change
             mockDevice.currentConsumption = 0;
-            mockDevice.maxIncreaseCapacity = 50;
-            mockDevice.hasChangePending = "decrease"; // Has pending decrease change
+            mockDevice.setIncreaseIncrements([50]);
+            mockDevice.setChangeState({ type: "decrease", expectedFutureConsumption: 0 }); // Has pending decrease change
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -521,24 +506,18 @@ describe("DeviceLoadManager", () => {
               name: "Device With Pending",
               priority: 2,
               currentConsumption: 0,
-              expectedFutureConsumption: 25, // Will consume 25W when pending change completes
-              minIncreaseCapacity: 25,
-              maxIncreaseCapacity: 50,
-              minDecreaseCapacity: 0,
-              maxDecreaseCapacity: 0,
+              increaseIncrements: [25, 50],
+              decreaseIncrements: [],
+              changeState: { type: "increase", expectedFutureConsumption: 25 }, // Will consume 25W when pending change completes
             });
-            deviceWithPending.hasChangePending = "increase";
 
             // Create second device without pending changes
             const deviceWithoutPending = new MockBaseDevice({
               name: "Device Without Pending",
               priority: 1,
               currentConsumption: 0,
-              expectedFutureConsumption: 0,
-              minIncreaseCapacity: 25,
-              maxIncreaseCapacity: 125,
-              minDecreaseCapacity: 0,
-              maxDecreaseCapacity: 0,
+              increaseIncrements: [25, 50, 75, 100, 125],
+              decreaseIncrements: [],
             });
 
             const manager = new DeviceLoadManager(
@@ -592,8 +571,7 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device with limited capacity
             mockDevice.currentConsumption = 0;
-            mockDevice.minIncreaseCapacity = 25;
-            mockDevice.maxIncreaseCapacity = 50; // Can only add 50W but need 100W
+            mockDevice.setIncreaseIncrements([25, 50]); // Can only add 50W but need 100W
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -642,10 +620,8 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device with both increase and decrease capacity
             mockDevice.currentConsumption = 30;
-            mockDevice.minIncreaseCapacity = 20;
-            mockDevice.maxIncreaseCapacity = 100;
-            mockDevice.minDecreaseCapacity = 20;
-            mockDevice.maxDecreaseCapacity = 30;
+            mockDevice.setIncreaseIncrements([20, 40, 60, 80, 100]);
+            mockDevice.setDecreaseIncrements([20, 30]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -773,7 +749,7 @@ describe("DeviceLoadManager", () => {
 
             // Configure mock device to respond to changes
             mockDevice.currentConsumption = 50;
-            mockDevice.maxDecreaseCapacity = 50;
+            mockDevice.setDecreaseIncrements([50]);
 
             const manager = new DeviceLoadManager(
               [mockDevice],
@@ -815,12 +791,12 @@ class MockBaseDevice implements IBaseDevice {
   name: string;
   priority: number;
   currentConsumption: number;
-  expectedFutureConsumption: number;
-  minIncreaseCapacity: number;
-  maxIncreaseCapacity: number;
-  minDecreaseCapacity: number;
-  maxDecreaseCapacity: number;
-  hasChangePending: "increase" | "decrease" | undefined;
+  private _increaseIncrements: number[];
+  private _decreaseIncrements: number[];
+  private _changeState: 
+    | { type: "increase" | "decrease", expectedFutureConsumption: number }
+    | { type: "debounce" }
+    | undefined;
 
   increaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
   decreaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
@@ -830,34 +806,59 @@ class MockBaseDevice implements IBaseDevice {
       name?: string;
       priority?: number;
       currentConsumption?: number;
-      expectedFutureConsumption?: number;
-      minIncreaseCapacity?: number;
-      maxIncreaseCapacity?: number;
-      minDecreaseCapacity?: number;
-      maxDecreaseCapacity?: number;
-      hasChangePending?: "increase" | "decrease" | undefined;
+      increaseIncrements?: number[];
+      decreaseIncrements?: number[];
+      changeState?: 
+        | { type: "increase" | "decrease", expectedFutureConsumption: number }
+        | { type: "debounce" }
+        | undefined;
     } = {},
   ) {
     this.name = overrides.name || "Mock Device";
     this.priority = overrides.priority || 1;
     this.currentConsumption = overrides.currentConsumption || 0;
-    this.expectedFutureConsumption = overrides.expectedFutureConsumption || 50;
-    this.minIncreaseCapacity = overrides.minIncreaseCapacity || 50;
-    this.maxIncreaseCapacity = overrides.maxIncreaseCapacity || 50;
-    this.minDecreaseCapacity = overrides.minDecreaseCapacity || 0;
-    this.maxDecreaseCapacity = overrides.maxDecreaseCapacity || 0;
-    this.hasChangePending = overrides.hasChangePending || undefined;
+    this._increaseIncrements = overrides.increaseIncrements || [50];
+    this._decreaseIncrements = overrides.decreaseIncrements || [];
+    this._changeState = overrides.changeState || undefined;
     
     // Setup mock functions
     this.increaseConsumptionBy = vi.fn();
     this.decreaseConsumptionBy = vi.fn();
   }
-  stop(): void {
-    // Mock implementation - do nothing
+
+  get increaseIncrements(): number[] {
+    return this._increaseIncrements;
   }
 
-  canChangeConsumption(): boolean {
-    return true;
+  get decreaseIncrements(): number[] {
+    return this._decreaseIncrements;
+  }
+
+  get changeState(): 
+    | { type: "increase" | "decrease", expectedFutureConsumption: number }
+    | { type: "debounce" }
+    | undefined {
+    return this._changeState;
+  }
+
+  // Helper methods for tests to update state
+  setIncreaseIncrements(increments: number[]) {
+    this._increaseIncrements = increments;
+  }
+
+  setDecreaseIncrements(increments: number[]) {
+    this._decreaseIncrements = increments;
+  }
+
+  setChangeState(changeState: 
+    | { type: "increase" | "decrease", expectedFutureConsumption: number }
+    | { type: "debounce" }
+    | undefined) {
+    this._changeState = changeState;
+  }
+
+  stop(): void {
+    // Mock implementation - do nothing
   }
 
   resetSpies() {
