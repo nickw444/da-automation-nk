@@ -68,9 +68,9 @@ export class DeviceLoadManager {
   };
 
   private shedLoad(excessConsumption: number) {
-    // Sort devices by priority (lowest first for shedding - shed low priority devices first)
+    // Sort devices by priority (highest first for shedding - shed low priority devices first)
     const sortedDevices = [...this.devices].sort(
-      (a, b) => a.priority - b.priority,
+      (a, b) => b.priority - a.priority,
     );
 
     let remainingToShed = excessConsumption;
@@ -109,9 +109,9 @@ export class DeviceLoadManager {
   }
 
   private addLoad(surplusCapacity: number) {
-    // Sort devices by priority (highest first for adding)
+    // Sort devices by priority (lowest first for adding)
     const sortedDevices = [...this.devices].sort(
-      (a, b) => b.priority - a.priority,
+      (a, b) => a.priority - b.priority,
     );
 
     let remainingToAdd = surplusCapacity;

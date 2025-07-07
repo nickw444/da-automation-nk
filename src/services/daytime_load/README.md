@@ -20,7 +20,7 @@ The Daytime Load Management Service optimizes home energy consumption by automat
 - Uses 1-minute averaged sensors for stable decision making (provided by Home Assistant)
 
 **Priority-Based Load Management**
-- Devices have configurable priorities (higher number = higher priority)
+- Devices have configurable priorities (lower number = higher priority)
 - Highest priority devices turn on first when excess solar is available
 - Lowest priority devices turn off first during load shedding
 
@@ -45,7 +45,7 @@ Devices are configured in [`config.ts`](file:///Users/nickw/repos/home/home-assi
   switchEntity: "switch.towel_rail",   // Home Assistant switch entity
   consumptionEntity: "sensor.towel_rail_current_consumption", // Optional power monitoring
   expectedPower: 80,            // Expected watts when on
-  priority: 1                   // Priority (1 = lowest)
+  priority: 1                   // Priority (1 = highest)
 }
 ```
 
@@ -65,7 +65,25 @@ The service consists of several key components:
 
 ### `device_load_manager.ts`
 
-<TODO>: Explain high level load management algorithm </TODO>
+The Device Load Manager implements a bangbang control algorithm that runs every 5 seconds to balance grid consumption:
+
+**Control Logic:**
+- **Shed Load**: When grid consumption exceeds `maxConsumptionBeforeSheddingLoad`
+  - Sorts devices by priority (highest first) to shed low-priority devices first
+  - Decreases consumption until grid consumption returns to `desiredGridConsumption`
+  - Respects minimum decrease thresholds and pending device changes
+
+- **Add Load**: When grid consumption falls below `minConsumptionBeforeAddingLoad`
+  - Sorts devices by priority (lowest first) to activate high-priority devices first
+  - Increases consumption to utilize surplus solar capacity up to `desiredGridConsumption`
+  - Accounts for pending device state changes to prevent over-commitment
+
+- **Hold**: When consumption is within acceptable range, no action is taken
+
+**Smart Features:**
+- Tracks pending device changes to avoid double-counting future consumption
+- Enforces minimum increase/decrease thresholds to prevent inefficient small adjustments
+- Respects device debounce periods and state change capabilities
 
 ## Benefits
 

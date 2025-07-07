@@ -112,7 +112,7 @@ describe("DeviceLoadManager", () => {
       }
     });
 
-    it("should shed load from highest priority devices first", async () => {
+    it("should shed load from lowest priority devices first", async () => {
       vi.useFakeTimers();
 
       try {
@@ -135,7 +135,7 @@ describe("DeviceLoadManager", () => {
             // Create devices with different priorities
             const lowPriorityDevice = new MockBaseDevice({
               name: "Low Priority Device",
-              priority: 1,
+              priority: 5,
               currentConsumption: 50,
               expectedFutureConsumption: 50,
               minIncreaseCapacity: 0,
@@ -146,7 +146,7 @@ describe("DeviceLoadManager", () => {
 
             const highPriorityDevice = new MockBaseDevice({
               name: "High Priority Device",
-              priority: 5,
+              priority: 1,
               currentConsumption: 50,
               expectedFutureConsumption: 50,
               minIncreaseCapacity: 0,
@@ -172,7 +172,7 @@ describe("DeviceLoadManager", () => {
             expect(
               lowPriorityDevice.decreaseConsumptionBy,
             ).toHaveBeenCalledWith(50);
-            // High priority device should be shed second to make up remaining 10W needed
+            // High priority device should not be shed
             expect(highPriorityDevice.decreaseConsumptionBy).not.toBeCalled();
 
             manager.stop();
@@ -328,7 +328,7 @@ describe("DeviceLoadManager", () => {
       }
     });
 
-    it("should add load to lowest priority devices first", async () => {
+    it("should add load to highest priority devices first", async () => {
       vi.useFakeTimers();
 
       try {
@@ -351,7 +351,7 @@ describe("DeviceLoadManager", () => {
             // Create devices with different priorities
             const lowPriorityDevice = new MockBaseDevice({
               name: "Low Priority Device",
-              priority: 1,
+              priority: 5,
               currentConsumption: 0,
               expectedFutureConsumption: 0,
               minIncreaseCapacity: 50,
@@ -362,7 +362,7 @@ describe("DeviceLoadManager", () => {
 
             const highPriorityDevice = new MockBaseDevice({
               name: "High Priority Device",
-              priority: 5,
+              priority: 1,
               currentConsumption: 0,
               expectedFutureConsumption: 0,
               minIncreaseCapacity: 50,
