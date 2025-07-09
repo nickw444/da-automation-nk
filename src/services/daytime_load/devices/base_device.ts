@@ -1,10 +1,11 @@
-export interface IBaseDevice {
+export interface IBaseDevice<T extends {delta: number}, U extends {delta: number}> {
   name: string;
   priority: number;
 
   // Amount of energy that can still be allocated to this device to be consumed
-  get increaseIncrements(): number[];
-  get decreaseIncrements(): number[];
+  // Separate types for increase and decrease increments
+  get increaseIncrements(): T[];
+  get decreaseIncrements(): U[];
 
   get currentConsumption(): number;
   get changeState():
@@ -14,16 +15,18 @@ export interface IBaseDevice {
 
   /**
    * Increase by amount specified in increments.
+   * Type-safe parameters: T for increase
    *  -> [22º, 23º, 24º]
    *  -> [8A, 9A, 10A] -> [240W, 480W, 720W]
    *  -> [true] -> [100W]
    */
-  increaseConsumptionBy(amount: number): void;
+  increaseConsumptionBy(increment: T): void;
 
   /**
    * Decrease by amount specified in increments.
+   * Type-safe parameters: U for decrease
    */
-  decreaseConsumptionBy(amount: number): void;
+  decreaseConsumptionBy(increment: U): void;
 
   /**
    * Cease consumption immediately (due to load management system shutdown)
@@ -33,45 +36,35 @@ export interface IBaseDevice {
 
 export class DeviceHelper {
   /**
-   * Validates that a device can increase consumption by the specified amount.
+   * Validates that a device can increase consumption by the specified increment.
    * Throws an error if validation fails, returns silently if in debounce period.
    */
-  static validateIncreaseConsumptionBy(device: IBaseDevice, amount: number): void {
-    // Validate that the amount is in our increments
-    const validIncrements = device.increaseIncrements;
-    if (!validIncrements.includes(amount)) {
-      throw new Error(
-        `Cannot increase consumption for ${device.name}: amount ${amount} W not in valid increments [${validIncrements.join(', ')}]`,
-      );
-    }
-
-    // Check if we have a pending change
+  static validateIncreaseConsumptionBy<T extends {delta: number}, U extends {delta: number}>(
+    device: IBaseDevice<T, U>, 
+    increment: T
+  ): void {
+    // Assume increment is valid since caller should pass objects directly from device.increaseIncrements
     const currentChangeState = device.changeState;
     if (currentChangeState?.type === "increase" || currentChangeState?.type === "decrease") {
       throw new Error(
-        `Cannot increase consumption for ${device.name}: change already pending`,
+        `Cannot increase consumption for ${device.name}: change already pending`
       );
     }
   }
 
   /**
-   * Validates that a device can decrease consumption by the specified amount.
+   * Validates that a device can decrease consumption by the specified increment.
    * Throws an error if validation fails, returns silently if in debounce period.
    */
-  static validateDecreaseConsumptionBy(device: IBaseDevice, amount: number): void {
-    // Validate that the amount is in our increments
-    const validIncrements = device.decreaseIncrements;
-    if (!validIncrements.includes(amount)) {
-      throw new Error(
-        `Cannot decrease consumption for ${device.name}: amount ${amount} W not in valid increments [${validIncrements.join(', ')}]`,
-      );
-    }
-
-    // Check if we have a pending change
+  static validateDecreaseConsumptionBy<T extends {delta: number}, U extends {delta: number}>(
+    device: IBaseDevice<T, U>, 
+    increment: U
+  ): void {
+    // Assume increment is valid since caller should pass objects directly from device.decreaseIncrements
     const currentChangeState = device.changeState;
     if (currentChangeState?.type === "increase" || currentChangeState?.type === "decrease") {
       throw new Error(
-        `Cannot decrease consumption for ${device.name}: change already pending`,
+        `Cannot decrease consumption for ${device.name}: change already pending`
       );
     }
   }

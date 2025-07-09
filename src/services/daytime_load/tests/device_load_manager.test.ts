@@ -103,7 +103,7 @@ describe("DeviceLoadManager", () => {
             vi.advanceTimersByTime(5000);
 
             // Verify device was asked to shed load
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith(50);
+            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_decrease" });
 
             manager.stop();
           });
@@ -138,7 +138,7 @@ describe("DeviceLoadManager", () => {
               priority: 5,
               currentConsumption: 50,
               increaseIncrements: [],
-              decreaseIncrements: [50],
+              decreaseIncrements: [{ delta: 50, action: "mock_decrease" }],
             });
 
             const highPriorityDevice = new MockBaseDevice({
@@ -146,7 +146,7 @@ describe("DeviceLoadManager", () => {
               priority: 1,
               currentConsumption: 50,
               increaseIncrements: [],
-              decreaseIncrements: [50],
+              decreaseIncrements: [{ delta: 50, action: "mock_decrease" }],
             });
 
             const manager = new DeviceLoadManager(
@@ -165,7 +165,7 @@ describe("DeviceLoadManager", () => {
             // Low priority device should be shed first
             expect(
               lowPriorityDevice.decreaseConsumptionBy,
-            ).toHaveBeenCalledWith(50);
+            ).toHaveBeenCalledWith({ delta: 50, action: "mock_decrease" });
             // High priority device should not be shed
             expect(highPriorityDevice.decreaseConsumptionBy).not.toBeCalled();
 
@@ -214,7 +214,7 @@ describe("DeviceLoadManager", () => {
             vi.advanceTimersByTime(5000);
 
             // Device should be asked to shed 30W (between min 10W and max 80W)
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith(30);
+            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith({ delta: 30, action: "mock_decrease" });
 
             manager.stop();
           });
@@ -311,7 +311,7 @@ describe("DeviceLoadManager", () => {
             vi.advanceTimersByTime(5000);
 
             // Verify device was asked to add load
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith(50);
+            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
 
             manager.stop();
           });
@@ -345,7 +345,7 @@ describe("DeviceLoadManager", () => {
               name: "Low Priority Device",
               priority: 5,
               currentConsumption: 0,
-              increaseIncrements: [50],
+              increaseIncrements: [{ delta: 50, action: "mock_increase" }],
               decreaseIncrements: [],
             });
 
@@ -353,7 +353,7 @@ describe("DeviceLoadManager", () => {
               name: "High Priority Device",
               priority: 1,
               currentConsumption: 0,
-              increaseIncrements: [50],
+              increaseIncrements: [{ delta: 50, action: "mock_increase" }],
               decreaseIncrements: [],
             });
 
@@ -373,7 +373,7 @@ describe("DeviceLoadManager", () => {
             // High priority device should be added to first
             expect(
               highPriorityDevice.increaseConsumptionBy,
-            ).toHaveBeenCalledWith(50);
+            ).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
             expect(
               lowPriorityDevice.increaseConsumptionBy,
             ).not.toHaveBeenCalled();
@@ -423,7 +423,7 @@ describe("DeviceLoadManager", () => {
             vi.advanceTimersByTime(5000);
 
             // Device should be asked to add 30W (between min 10W and max 80W)
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith(30);
+            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 30, action: "mock_increase" });
 
             manager.stop();
           });
@@ -506,7 +506,7 @@ describe("DeviceLoadManager", () => {
               name: "Device With Pending",
               priority: 2,
               currentConsumption: 0,
-              increaseIncrements: [25, 50],
+              increaseIncrements: [{ delta: 25, action: "mock_increase" }, { delta: 50, action: "mock_increase" }],
               decreaseIncrements: [],
               changeState: { type: "increase", expectedFutureConsumption: 25 }, // Will consume 25W when pending change completes
             });
@@ -516,7 +516,13 @@ describe("DeviceLoadManager", () => {
               name: "Device Without Pending",
               priority: 1,
               currentConsumption: 0,
-              increaseIncrements: [25, 50, 75, 100, 125],
+              increaseIncrements: [
+                { delta: 25, action: "mock_increase" }, 
+                { delta: 50, action: "mock_increase" }, 
+                { delta: 75, action: "mock_increase" }, 
+                { delta: 100, action: "mock_increase" }, 
+                { delta: 125, action: "mock_increase" }
+              ],
               decreaseIncrements: [],
             });
 
@@ -540,7 +546,7 @@ describe("DeviceLoadManager", () => {
             // Device without pending should get the remaining load (100W - 25W expected = 75W)
             expect(
               deviceWithoutPending.increaseConsumptionBy,
-            ).toHaveBeenCalledWith(75);
+            ).toHaveBeenCalledWith({ delta: 75, action: "mock_increase" });
 
             manager.stop();
           });
@@ -587,7 +593,7 @@ describe("DeviceLoadManager", () => {
             vi.advanceTimersByTime(5000);
 
             // Device should be asked to add its maximum capacity (50W) even though 100W is needed
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith(50);
+            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
 
             manager.stop();
           });
@@ -787,27 +793,32 @@ describe("DeviceLoadManager", () => {
   });
 });
 
-class MockBaseDevice implements IBaseDevice {
+interface MockIncrement {
+  delta: number;
+  action: string;
+}
+
+class MockBaseDevice implements IBaseDevice<MockIncrement, MockIncrement> {
   name: string;
   priority: number;
   currentConsumption: number;
-  private _increaseIncrements: number[];
-  private _decreaseIncrements: number[];
+  private _increaseIncrements: MockIncrement[];
+  private _decreaseIncrements: MockIncrement[];
   private _changeState: 
     | { type: "increase" | "decrease", expectedFutureConsumption: number }
     | { type: "debounce" }
     | undefined;
 
-  increaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
-  decreaseConsumptionBy: MockInstance<(amount: number) => void> & ((amount: number) => void);
+  increaseConsumptionBy: MockInstance<(increment: MockIncrement) => void> & ((increment: MockIncrement) => void);
+  decreaseConsumptionBy: MockInstance<(increment: MockIncrement) => void> & ((increment: MockIncrement) => void);
 
   constructor(
     overrides: {
       name?: string;
       priority?: number;
       currentConsumption?: number;
-      increaseIncrements?: number[];
-      decreaseIncrements?: number[];
+      increaseIncrements?: MockIncrement[];
+      decreaseIncrements?: MockIncrement[];
       changeState?: 
         | { type: "increase" | "decrease", expectedFutureConsumption: number }
         | { type: "debounce" }
@@ -817,7 +828,7 @@ class MockBaseDevice implements IBaseDevice {
     this.name = overrides.name || "Mock Device";
     this.priority = overrides.priority || 1;
     this.currentConsumption = overrides.currentConsumption || 0;
-    this._increaseIncrements = overrides.increaseIncrements || [50];
+    this._increaseIncrements = overrides.increaseIncrements || [{ delta: 50, action: "mock_increase" }];
     this._decreaseIncrements = overrides.decreaseIncrements || [];
     this._changeState = overrides.changeState || undefined;
     
@@ -826,11 +837,11 @@ class MockBaseDevice implements IBaseDevice {
     this.decreaseConsumptionBy = vi.fn();
   }
 
-  get increaseIncrements(): number[] {
+  get increaseIncrements(): MockIncrement[] {
     return this._increaseIncrements;
   }
 
-  get decreaseIncrements(): number[] {
+  get decreaseIncrements(): MockIncrement[] {
     return this._decreaseIncrements;
   }
 
@@ -843,11 +854,11 @@ class MockBaseDevice implements IBaseDevice {
 
   // Helper methods for tests to update state
   setIncreaseIncrements(increments: number[]) {
-    this._increaseIncrements = increments;
+    this._increaseIncrements = increments.map(delta => ({ delta, action: "mock_increase" }));
   }
 
   setDecreaseIncrements(increments: number[]) {
-    this._decreaseIncrements = increments;
+    this._decreaseIncrements = increments.map(delta => ({ delta, action: "mock_decrease" }));
   }
 
   setChangeState(changeState: 

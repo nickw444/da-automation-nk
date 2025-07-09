@@ -6,7 +6,17 @@ import {
 import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
 
-export class BooleanDevice implements IBaseDevice {
+interface BooleanIncreaseIncrement {
+  delta: number;     // Power consumption change in watts
+  action: "turn_on"; // Encapsulated desired action
+}
+
+interface BooleanDecreaseIncrement {
+  delta: number;     // Power consumption change in watts
+  action: "turn_off"; // Encapsulated desired action
+}
+
+export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, BooleanDecreaseIncrement> {
   private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
     new ConsumptionTransitionStateMachine();
   private unlockedTime: number = 0;
@@ -24,23 +34,29 @@ export class BooleanDevice implements IBaseDevice {
   ) {
   }
 
-  get increaseIncrements(): number[] {
+  get increaseIncrements(): BooleanIncreaseIncrement[] {
     if (this.entityRef.state === "on") {
       // When already on, we can't increase consumption
       return [];
     }
     // For off device, use expectedConsumption (don't rely on sensor when off)
-    return [this.expectedConsumption];
+    return [{ 
+      delta: this.expectedConsumption, 
+      action: "turn_on" 
+    }];
   }
 
-  get decreaseIncrements(): number[] {
+  get decreaseIncrements(): BooleanDecreaseIncrement[] {
     if (this.entityRef.state === "off") {
       // When already off, we can't decrease consumption
       return [];
     }
     // For on device, use actual consumption from sensor, fallback to expected
     const consumption = unwrapNumericState(this.consumptionEntityRef.state) || this.expectedConsumption;
-    return [consumption];
+    return [{ 
+      delta: consumption, 
+      action: "turn_off" 
+    }];
   }
   get currentConsumption(): number {
     return unwrapNumericState(this.consumptionEntityRef.state) || 0;
@@ -83,15 +99,16 @@ export class BooleanDevice implements IBaseDevice {
     }
   }
 
-  increaseConsumptionBy(amount: number): void {
+  increaseConsumptionBy(increment: BooleanIncreaseIncrement): void {
     // Check for debounce - return silently if in debounce period
     if (this.changeState?.type === "debounce") {
       return;
     }
 
-    DeviceHelper.validateIncreaseConsumptionBy(this, amount);
+    DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
-    if (amount > 0 && this.entityRef.state === "off") {
+    if (increment.action === "turn_on" && this.entityRef.state === "off") {
+      // Action is already encoded - just execute it
       this.entityRef.turn_on();
       this.recordStateChange("on");
       
@@ -109,15 +126,15 @@ export class BooleanDevice implements IBaseDevice {
     }
   }
 
-  decreaseConsumptionBy(amount: number): void {
+  decreaseConsumptionBy(increment: BooleanDecreaseIncrement): void {
     // Check for debounce - return silently if in debounce period
     if (this.changeState?.type === "debounce") {
       return;
     }
 
-    DeviceHelper.validateDecreaseConsumptionBy(this, amount);
+    DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
-    if (amount > 0 && this.entityRef.state === "on") {
+    if (increment.action === "turn_off" && this.entityRef.state === "on") {
       this.entityRef.turn_off();
       this.recordStateChange("off");
       

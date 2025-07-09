@@ -8,7 +8,7 @@ export class DeviceLoadManager {
   private loopInterval: NodeJS.Timeout | undefined = undefined;
 
   constructor(
-    private readonly devices: IBaseDevice[],
+    private readonly devices: IBaseDevice<{delta: number}, {delta: number}>[],
     private readonly logger: ILogger,
     private readonly gridConsumptionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
     private readonly gridConsumptionSensorMean1m: ByIdProxy<
@@ -93,16 +93,16 @@ export class DeviceLoadManager {
       if (decreaseIncrements.length > 0) {
         // Find the best fitting increment that doesn't exceed remainingToShed
         const suitableIncrement = decreaseIncrements
-          .filter(increment => increment <= remainingToShed)
-          .sort((a, b) => b - a)[0]; // Pick the largest suitable increment
+          .filter(increment => increment.delta <= remainingToShed)
+          .sort((a, b) => b.delta - a.delta)[0]; // Pick the largest suitable increment
 
         if (suitableIncrement !== undefined) {
-          this.logger.info(`Shedding ${suitableIncrement} W from ${device.name}`);
+          this.logger.info(`Shedding ${suitableIncrement.delta} W from ${device.name}`);
           device.decreaseConsumptionBy(suitableIncrement);
-          remainingToShed -= suitableIncrement;
+          remainingToShed -= suitableIncrement.delta;
         } else {
           this.logger.debug(
-            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.join(', ')}] W, needed: ≤${remainingToShed} W)`,
+            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.map(i => i.delta).join(', ')}] W, needed: ≤${remainingToShed} W)`,
           );
         }
       }
@@ -158,16 +158,16 @@ export class DeviceLoadManager {
       if (increaseIncrements.length > 0) {
         // Find the best fitting increment that doesn't exceed remainingToAdd
         const suitableIncrement = increaseIncrements
-          .filter(increment => increment <= remainingToAdd)
-          .sort((a, b) => b - a)[0]; // Pick the largest suitable increment
+          .filter(increment => increment.delta <= remainingToAdd)
+          .sort((a, b) => b.delta - a.delta)[0]; // Pick the largest suitable increment
 
         if (suitableIncrement !== undefined) {
-          this.logger.info(`Adding ${suitableIncrement} W to ${device.name}`);
+          this.logger.info(`Adding ${suitableIncrement.delta} W to ${device.name}`);
           device.increaseConsumptionBy(suitableIncrement);
-          remainingToAdd -= suitableIncrement;
+          remainingToAdd -= suitableIncrement.delta;
         } else {
           this.logger.debug(
-            `Skipping ${device.name} - no suitable increment (available: [${increaseIncrements.join(', ')}] W, needed: ≤${remainingToAdd} W)`,
+            `Skipping ${device.name} - no suitable increment (available: [${increaseIncrements.map(i => i.delta).join(', ')}] W, needed: ≤${remainingToAdd} W)`,
           );
         }
       }

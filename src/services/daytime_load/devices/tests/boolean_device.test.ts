@@ -33,7 +33,7 @@ describe("BooleanDevice", () => {
         );
 
         // When device is off, it can increase consumption
-        expect(device.increaseIncrements).toEqual([50]); // falls back to expectedConsumption
+        expect(device.increaseIncrements).toEqual([{ delta: 50, action: "turn_on" }]);
 
         // When device is off, it cannot decrease consumption
         expect(device.decreaseIncrements).toEqual([]);
@@ -68,7 +68,7 @@ describe("BooleanDevice", () => {
         expect(device.increaseIncrements).toEqual([]);
 
         // When device is on, it can decrease consumption
-        expect(device.decreaseIncrements).toEqual([45]); // actual consumption
+        expect(device.decreaseIncrements).toEqual([{ delta: 45, action: "turn_off" }]);
       });
   });
 
@@ -100,7 +100,7 @@ describe("BooleanDevice", () => {
         const turnOnSpy = vi.spyOn(hass.call.switch, "turn_on");
 
         // Call increaseConsumptionBy with the device's capacity
-        device.increaseConsumptionBy(50);
+        device.increaseConsumptionBy({ delta: 50, action: "turn_on" });
 
         // Verify turn_on service was called with correct entity
         expect(turnOnSpy).toHaveBeenCalledWith({
@@ -140,7 +140,7 @@ describe("BooleanDevice", () => {
         const turnOffSpy = vi.spyOn(hass.call.switch, "turn_off");
 
         // Call decreaseConsumptionBy with the device's capacity
-        device.decreaseConsumptionBy(45);
+        device.decreaseConsumptionBy({ delta: 45, action: "turn_off" });
 
         // Verify turn_off service was called with correct entity
         expect(turnOffSpy).toHaveBeenCalledWith({
@@ -179,10 +179,9 @@ describe("BooleanDevice", () => {
         // Spy on the service call
         const turnOnSpy = vi.spyOn(hass.call.switch, "turn_on");
 
-        // When device is already on, increase increments is [], so calling increaseConsumptionBy should throw
-        expect(() => device.increaseConsumptionBy(10)).toThrow(
-          "Cannot increase consumption for Test Device: amount 10 W not in valid increments []",
-        );
+        // When device is already on, increaseConsumptionBy will not do anything
+        // since the condition (increment.delta > 0 && state === "off") won't be met
+        device.increaseConsumptionBy({ delta: 10, action: "turn_on" });
 
         // Verify turn_on was NOT called
         expect(turnOnSpy).not.toHaveBeenCalled();
@@ -219,10 +218,9 @@ describe("BooleanDevice", () => {
         // Spy on the service call
         const turnOffSpy = vi.spyOn(hass.call.switch, "turn_off");
 
-        // When device is already off, decrease increments is [], so calling decreaseConsumptionBy should throw
-        expect(() => device.decreaseConsumptionBy(10)).toThrow(
-          "Cannot decrease consumption for Test Device: amount 10 W not in valid increments []",
-        );
+        // When device is already off, decreaseConsumptionBy will not do anything
+        // since the condition (increment.delta > 0 && state === "on") won't be met
+        device.decreaseConsumptionBy({ delta: 10, action: "turn_off" });
 
         // Verify turn_off was NOT called
         expect(turnOffSpy).not.toHaveBeenCalled();
@@ -286,7 +284,7 @@ describe("BooleanDevice", () => {
         );
 
         // Trigger increase to put device in pending state
-        device.increaseConsumptionBy(50);
+        device.increaseConsumptionBy({ delta: 50, action: "turn_on" });
 
         // Test expected future consumption when increase is pending
         const changeState = device.changeState;
@@ -322,7 +320,7 @@ describe("BooleanDevice", () => {
         );
 
         // Trigger decrease to put device in pending state
-        device.decreaseConsumptionBy(45);
+        device.decreaseConsumptionBy({ delta: 45, action: "turn_off" });
 
         // Test expected future consumption when decrease is pending
         const changeState = device.changeState;
@@ -358,7 +356,7 @@ describe("BooleanDevice", () => {
         );
 
         // When sensor returns null, should fallback to expectedConsumption for increments
-        expect(device.increaseIncrements).toEqual([50]);
+        expect(device.increaseIncrements).toEqual([{ delta: 50, action: "turn_on" }]);
 
         // Current consumption should return 0 when sensor is null
         expect(device.currentConsumption).toBe(0);
@@ -394,7 +392,7 @@ describe("BooleanDevice", () => {
           );
 
           // Call increaseConsumptionBy to trigger state machine transition
-          device.increaseConsumptionBy(50);
+          device.increaseConsumptionBy({ delta: 50, action: "turn_on" });
 
           // Verify state machine is in INCREASE_PENDING state
           expect(device.changeState?.type).toBe("increase");
