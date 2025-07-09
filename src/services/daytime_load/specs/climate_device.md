@@ -175,31 +175,7 @@ When turning the device on from completely off state:
 - **Example (no clamping)**: Room 26°C, desired 20°C, offset 2°C → setpoint 24°C, delta = max(|26-24| * 150, 300) = max(300W, 300W) = 300W
 - **Example (with clamping)**: Room 26°C, desired 20°C, comfort 22°C, offset 2°C → setpoint clamped to 22°C, delta = max(|26-22| * 150, 300) = max(600W, 300W) = 600W
 
-### Proposed IBaseDevice Enhancement
 
-To avoid recalculating setpoint mappings, consider enhancing `IBaseDevice` to be generic:
-
-```typescript
-interface IBaseDevice<T extends {delta: number}> {
-  get increaseIncrements(): T[];
-  get decreaseIncrements(): T[];
-  increaseConsumptionBy(increment: T): void;
-  decreaseConsumptionBy(increment: T): void;
-}
-
-interface ClimateIncrement {
-  delta: number;                    // Power consumption change in watts
-  targetSetpoint?: number;          // Absolute target setpoint (e.g., 23°C)
-  setpointChange?: number;          // Relative setpoint change (e.g., +1°C)
-  modeChange?: "fan" | "heat" | "cool"; // Mode switch operation
-}
-```
-
-**Benefits:**
-- Eliminates reverse-mapping calculations in increase/decrease methods
-- Encodes all necessary action data directly in increment objects
-- Provides type safety for device-specific increment data
-- Simplifies implementation by avoiding duplicate calculations
 
 ## State Management & Timing
 
