@@ -7,7 +7,7 @@ export default defineConfig({
     testTimeout: 30000,
     coverage: {
       provider: "v8",
-      reporter: ["html", "lcov", "clover"],
+      reporter: ["html", "lcov", "clover", "text"],
     },
   },
 });

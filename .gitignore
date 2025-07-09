@@ -1,6 +1,7 @@
 build
 node_modules
 .env
+coverage
 
 # DigitalAlchemy Fixtures: Generate these prior to building
 # $> npx @digital-alchemy/type-writer 
