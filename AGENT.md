@@ -88,10 +88,33 @@ Check `docs/digital-alchemy/docs/home-automation/automation/` for patterns like:
 
 ## 🧪 Testing Guidelines
 
-- Tests use vi with the framework's testing utilities
-- Services can be mocked and tested in isolation
-- Use `testRunner.run()` for service testing
-- See `docs/digital-alchemy/docs/testing/` for specific patterns
+This project uses a **dual testing strategy**:
+
+### Two Testing Approaches
+
+1. **Business Logic Tests**: Fast vanilla vitest with entity wrapper mocks
+   - Test device logic without framework overhead
+   - Use `MockBooleanEntityWrapper` and `MockSensorEntityWrapper` interfaces
+   - Location: `src/services/*/devices/tests/`
+
+2. **Integration Tests**: Digital Alchemy's `TestRunner` with real entity IDs
+   - Test entity wrappers and framework integration
+   - Use `LIB_MOCK_ASSISTANT` for entity state setup
+   - Location: `src/entities/tests/`
+
+### Entity Wrapper Pattern
+
+- Business logic depends on interfaces (`IBooleanEntityWrapper`, `ISensorEntityWrapper`)
+- Real implementations wrap Digital Alchemy `ByIdProxy`
+- Mock interfaces extend real interfaces with read/write `state` properties
+- Place both real and mock interfaces in the same file for reusability
+
+### Best Practices
+
+- Use business logic tests for device behavior, algorithms, debounce logic
+- Use integration tests for entity wrapper functionality and service calls
+- Import mock interfaces from entity wrapper files for consistency
+- See `docs/digital-alchemy/docs/testing/` for framework-specific patterns
 
 ## ⚠️ Important Guidelines
 

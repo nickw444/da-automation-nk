@@ -1,10 +1,11 @@
-import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 import {
   ConsumptionTransitionState,
   ConsumptionTransitionStateMachine,
 } from "./consumption_transition_state_machine";
 import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
+import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
+import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 
 interface BooleanIncreaseIncrement {
   delta: number;     // Power consumption change in watts
@@ -22,10 +23,8 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
   private unlockedTime: number = 0;
 
   constructor(
-    private readonly entityRef: ByIdProxy<
-      PICK_ENTITY<"switch" | "light" | "fan">
-    >,
-    private readonly consumptionEntityRef: ByIdProxy<PICK_ENTITY<"sensor">>,
+    private readonly entityRef: IBooleanEntityWrapper,
+    private readonly consumptionEntityRef: ISensorEntityWrapper,
     private readonly expectedConsumption: number, // Expected power consumption in watts
     public readonly name: string,
     public readonly priority: number,
