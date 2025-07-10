@@ -51,7 +51,7 @@ export interface ClimateIncrement {
     delta: number;                  // Power consumption change (in Watts)
     targetSetpoint?: number;        // Absolute target setpoint
     setpointChange?: number;        // Relative change from current setpoint
-    modeChange?: string;            // Mode switch operation
+    modeChange?: "heat" | "cool" | "fan_only";  // Mode switch operation
 }
 
 export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncrement> {
@@ -248,6 +248,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         // Generate setpoint decreases (away from desired setpoint)
         const step = this.config.setpointStep;
+        let lastDelta: number | undefined;
         
         if (desiredMode === "heat") {
             // For heating, move setpoint lower (less aggressive heating)
@@ -259,16 +260,22 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                  targetSetpoint >= lowerBound && targetSetpoint >= this.config.minSetpoint; 
                  targetSetpoint -= step) {
                 
-                // For running devices, calculate consumption delta based on setpoint change
+                // Calculate consumption reduction (negative delta)
                 const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const delta = setpointDelta * this.config.consumptionPerDegree;
+                const consumptionReduction = setpointDelta * this.config.consumptionPerDegree;
                 
-                if (delta > 0) { // Only include if it actually decreases consumption
+                // Clamp reduction to not go below minimum consumption
+                const maxReduction = currentConsumption - this.config.heatCoolMinConsumption;
+                const clampedReduction = Math.min(consumptionReduction, maxReduction);
+                const delta = -clampedReduction; // Negative for decrease increments
+                
+                if (clampedReduction > 0 && delta !== lastDelta) { // Only include if it actually decreases consumption and is not duplicate
                     increments.push({
-                        delta, // Already positive for decrease increments
+                        delta,
                         targetSetpoint,
                         setpointChange: targetSetpoint - currentSetpoint,
                     });
+                    lastDelta = delta;
                 }
             }
         } else if (desiredMode === "cool") {
@@ -281,26 +288,32 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                  targetSetpoint <= upperBound && targetSetpoint <= this.config.maxSetpoint; 
                  targetSetpoint += step) {
                 
-                // For running devices, calculate consumption delta based on setpoint change
+                // Calculate consumption reduction (negative delta)
                 const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const delta = setpointDelta * this.config.consumptionPerDegree;
+                const consumptionReduction = setpointDelta * this.config.consumptionPerDegree;
                 
-                if (delta > 0) { // Only include if it actually decreases consumption
+                // Clamp reduction to not go below minimum consumption
+                const maxReduction = currentConsumption - this.config.heatCoolMinConsumption;
+                const clampedReduction = Math.min(consumptionReduction, maxReduction);
+                const delta = -clampedReduction; // Negative for decrease increments
+                
+                if (clampedReduction > 0 && delta !== lastDelta) { // Only include if it actually decreases consumption and is not duplicate
                     increments.push({
-                        delta, // Already positive for decrease increments
+                        delta,
                         targetSetpoint,
                         setpointChange: targetSetpoint - currentSetpoint,
                     });
+                    lastDelta = delta;
                 }
             }
         }
 
         // Handle mode transitions to fan-only (only when no comfort setpoint specified)
         if ((currentMode === "heat" || currentMode === "cool") && this.hassControls.comfortSetpoint === undefined) {
-            const fanOnlyDelta = currentConsumption - this.config.fanOnlyMinConsumption;
-            if (fanOnlyDelta > 0) {
+            const fanOnlyReduction = currentConsumption - this.config.fanOnlyMinConsumption;
+            if (fanOnlyReduction > 0) {
                 increments.push({
-                    delta: fanOnlyDelta,
+                    delta: -fanOnlyReduction, // Negative for decrease increments
                     modeChange: "fan_only",
                 });
             }

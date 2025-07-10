@@ -350,36 +350,27 @@ describe("ClimateDevice", () => {
         
         const increments = device.decreaseIncrements;
         
-        // With corrected implementation: deltas are positive values representing consumption reduction
-        // Current setpoint: 22°C, moving to higher setpoints reduces aggressiveness
-        // 22°C -> 23°C: 1°C less aggressive = 350W reduction
-        // 22°C -> 24°C: 2°C less aggressive = 700W reduction
-        // 22°C -> 25°C: 3°C less aggressive = 1050W reduction
-        // 22°C -> 26°C: 4°C less aggressive = 1400W reduction
+        // With corrected implementation: deltas are negative values representing consumption reduction
+        // Current consumption: 1400W, heatCoolMinConsumption: 700W, max reduction: 700W
+        // 22°C -> 23°C: 1°C less aggressive = 350W reduction (delta: -350W)
+        // 22°C -> 24°C: 2°C less aggressive = 700W reduction (delta: -700W) 
+        // 22°C -> 25°C: 3°C would be 1050W, but clamped to 700W max reduction (delta: -700W, filtered as duplicate)
+        // 22°C -> 26°C: 4°C would be 1400W, but clamped to 700W max reduction (delta: -700W, filtered as duplicate)
         
-        // Should have 4 setpoint increments (up to comfort setpoint 26°C), no fan-only due to comfort setpoint
+        // Should have 2 unique setpoint increments (duplicate deltas filtered out), no fan-only due to comfort setpoint
         expect(increments).toEqual([
           expect.objectContaining({ 
             targetSetpoint: 23, 
             setpointChange: 1, 
-            delta: 350
+            delta: -350  // 350W reduction
             // No modeChange property for setpoint adjustments
           }),
           expect.objectContaining({ 
             targetSetpoint: 24, 
             setpointChange: 2, 
-            delta: 700
+            delta: -700  // 700W reduction (max possible)
           }),
-          expect.objectContaining({ 
-            targetSetpoint: 25, 
-            setpointChange: 3, 
-            delta: 1050
-          }),
-          expect.objectContaining({ 
-            targetSetpoint: 26, 
-            setpointChange: 4, 
-            delta: 1400
-          }),
+          // 25°C and 26°C setpoints filtered out due to duplicate -700W delta
           // No fan-only increment because comfort setpoint is specified
         ]);
 
@@ -398,26 +389,19 @@ describe("ClimateDevice", () => {
         
         const increments = device.decreaseIncrements;
         
-        // Should have 8 setpoint increments (23-30°C) + 1 fan-only increment (no comfort limit)
+        // Should have 2 unique setpoint increments + 1 fan-only increment (no comfort limit)
+        // Current consumption: 1400W, heatCoolMinConsumption: 700W, max reduction: 700W
+        // Duplicate deltas are filtered out (25°C-30°C would all be -700W, so only first occurrence is kept)
         expect(increments).toEqual([
-          expect.objectContaining({ targetSetpoint: 23, setpointChange: 1, delta: 350 }),   // 1°C less aggressive
-          expect.objectContaining({ targetSetpoint: 24, setpointChange: 2, delta: 700 }),   // 2°C less aggressive  
-          expect.objectContaining({ targetSetpoint: 25, setpointChange: 3, delta: 1050 }),  // 3°C less aggressive
-          expect.objectContaining({ targetSetpoint: 26, setpointChange: 4, delta: 1400 }),  // 4°C less aggressive
-          expect.objectContaining({ targetSetpoint: 27, setpointChange: 5, delta: 1750 }),  // 5°C less aggressive
-          expect.objectContaining({ targetSetpoint: 28, setpointChange: 6, delta: 2100 }),  // 6°C less aggressive
-          expect.objectContaining({ targetSetpoint: 29, setpointChange: 7, delta: 2450 }),  // 7°C less aggressive
-          expect.objectContaining({ targetSetpoint: 30, setpointChange: 8, delta: 2800 }),  // 8°C less aggressive (maxSetpoint)
+          expect.objectContaining({ targetSetpoint: 23, setpointChange: 1, delta: -350 }),  // 350W reduction
+          expect.objectContaining({ targetSetpoint: 24, setpointChange: 2, delta: -700 }),  // 700W reduction (max)
+          // 25°C-30°C setpoints filtered out due to duplicate -700W delta
           expect.objectContaining({ 
             modeChange: "fan_only", 
-            delta: 1250  // 1400W - 150W = 1250W reduction
+            delta: -1250  // 1400W - 150W = 1250W reduction
             // No targetSetpoint for mode changes
           }),
         ]);
-        
-        // Check that off increment is NOT offered (handled internally by fan_only timeout)
-        const offIncrement = increments.find(inc => inc.modeChange === "off");
-        expect(offIncrement).toBeUndefined();
       });
 
       it("should not include fan-only mode when comfort setpoint is specified", () => {
@@ -429,28 +413,12 @@ describe("ClimateDevice", () => {
         // Set up for heating with comfort setpoint (fan-only not allowed)
         hassControls.desiredMode = "heat";
         hassControls.desiredSetpoint = 28;
-        hassControls.comfortSetpoint = 18; // Minimum allowed for heating
+        hassControls.comfortSetpoint = 24; // Minimum allowed for heating
         
         const increments = device.decreaseIncrements;
         
         const fanOnlyIncrement = increments.find(inc => inc.modeChange === "fan_only");
         expect(fanOnlyIncrement).toBeUndefined();
-      });
-
-      it("should not include off mode increment (handled internally by fan_only timeout)", () => {
-        mockClimateEntity.state = "cool";
-        mockClimateEntity.attributes.current_temperature = 24; // Room temp
-        mockClimateEntity.attributes.temperature = 22; // Current setpoint
-        mockSensorEntity.state = 1400; // Current consumption
-        
-        hassControls.desiredMode = "cool";
-        hassControls.desiredSetpoint = 20;
-        
-        const increments = device.decreaseIncrements;
-        
-        // Off mode should not be offered as direct increment - it's handled internally by fan_only timeout
-        const offIncrement = increments.find(inc => inc.modeChange === "off");
-        expect(offIncrement).toBeUndefined();
       });
 
       it("should respect comfort setpoint boundaries for heating", () => {
@@ -506,9 +474,9 @@ describe("ClimateDevice", () => {
         
         const increments = device.decreaseIncrements;
         
-        // All increments should have positive delta (representing decreases)
+        // All increments should have negative delta (representing decreases)
         increments.forEach(increment => {
-          expect(increment.delta).toBeGreaterThan(0);
+          expect(increment.delta).toBeLessThan(0);
         });
       });
 
