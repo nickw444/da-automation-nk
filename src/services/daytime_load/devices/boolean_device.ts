@@ -53,7 +53,7 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
     // For on device, use actual consumption from sensor, fallback to expected
     const consumption = unwrapNumericState(this.consumptionEntityRef.state) || this.expectedConsumption;
     return [{ 
-      delta: consumption, 
+      delta: -consumption, 
       action: "turn_off" 
     }];
   }
