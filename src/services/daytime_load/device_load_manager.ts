@@ -92,17 +92,18 @@ export class DeviceLoadManager {
       const decreaseIncrements = device.decreaseIncrements;
       if (decreaseIncrements.length > 0) {
         // Find the best fitting increment that doesn't exceed remainingToShed
+        // Note: decrease deltas are negative, so we need to compare absolute values
         const suitableIncrement = decreaseIncrements
-          .filter(increment => increment.delta <= remainingToShed)
-          .sort((a, b) => b.delta - a.delta)[0]; // Pick the largest suitable increment
+          .filter(increment => Math.abs(increment.delta) <= remainingToShed)
+          .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0]; // Pick the largest suitable increment
 
         if (suitableIncrement !== undefined) {
-          this.logger.info(`Shedding ${suitableIncrement.delta} W from ${device.name}`);
+          this.logger.info(`Shedding ${Math.abs(suitableIncrement.delta)} W from ${device.name}`);
           device.decreaseConsumptionBy(suitableIncrement);
-          remainingToShed -= suitableIncrement.delta;
+          remainingToShed -= Math.abs(suitableIncrement.delta);
         } else {
           this.logger.debug(
-            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.map(i => i.delta).join(', ')}] W, needed: ≤${remainingToShed} W)`,
+            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.map(i => Math.abs(i.delta)).join(', ')}] W, needed: ≤${remainingToShed} W)`,
           );
         }
       }

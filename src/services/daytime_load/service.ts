@@ -1,6 +1,9 @@
 import type { TServiceParams } from "@digital-alchemy/core";
 import { config as appConfig } from "./config";
 import { BooleanDevice } from "./devices/boolean_device";
+import { ClimateDevice, ClimateHassControls } from "./devices/climate_device";
+import { ClimateEntityWrapper } from "../../entities/climate_entity_wrapper";
+import { SensorEntityWrapper } from "../../entities/sensor_entity_wrapper";
 import { DeviceLoadManager } from "./device_load_manager";
 import { SystemStateManager } from "./system_state_manager";
 
@@ -39,6 +42,18 @@ export function DaytimeLoadService({
               deviceConfig.priority,
               deviceConfig.offToOnDebounceMs,
               deviceConfig.onToOffDebounceMs,
+            );
+          case "climate":
+            // Create Climate Entity and Sensor Entity wrappers
+            const climateEntityWrapper = new ClimateEntityWrapper(hass.refBy.id(deviceConfig.entityId));
+            const consumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
+            return new ClimateDevice(
+              deviceConfig.name,
+              deviceConfig.priority,
+              climateEntityWrapper,
+              consumptionSensorWrapper,
+              deviceConfig.opts,
+              new ClimateHassControls(deviceConfig.name, synapse, context),
             );
           default:
             logger.error(`Unsupported device kind: ${deviceConfig.kind}`);

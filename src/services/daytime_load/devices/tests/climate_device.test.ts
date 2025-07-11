@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ClimateDevice, ClimateDeviceConfig, IClimateHassControls } from "../climate_device";
+import { ClimateDevice, ClimateDeviceOptions, IClimateHassControls } from "../climate_device";
 import { MockClimateEntityWrapper } from "../../../../entities/climate_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
 
 describe("ClimateDevice", () => {
   let mockClimateEntity: MockClimateEntityWrapper;
   let mockSensorEntity: MockSensorEntityWrapper;
-  let config: ClimateDeviceConfig;
+  let config: ClimateDeviceOptions;
   let hassControls: IClimateHassControls;
   let device: ClimateDevice;
 
@@ -32,10 +32,6 @@ describe("ClimateDevice", () => {
     };
 
     config = {
-      name: "Test Climate Device",
-      priority: 1,
-      climateEntity: "climate.test_hvac",
-      consumptionEntity: "sensor.test_power",
       minSetpoint: 16,
       maxSetpoint: 30,
       setpointStep: 1.0,
@@ -58,6 +54,8 @@ describe("ClimateDevice", () => {
     };
 
     device = new ClimateDevice(
+      "Test Climate Device",
+      1,
       mockClimateEntity,
       mockSensorEntity,
       config,
@@ -684,9 +682,160 @@ describe("ClimateDevice", () => {
   // Note: Debounce logic will be tested functionally in Phase 5 when
   // increaseConsumptionBy/decreaseConsumptionBy trigger the debounce behavior
 
+  describe("Fan-Only Timeout Logic", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("should start timeout when transitioning to fan-only mode", () => {
+      mockClimateEntity.state = "cool";
+      mockSensorEntity.state = 1400;
+      const increment = {
+        delta: -1250,
+        modeChange: "fan_only" as const,
+      };
+
+      device.decreaseConsumptionBy(increment);
+
+      expect(mockClimateEntity.setHvacMode).toHaveBeenCalledWith("fan_only");
+    });
+
+    it("should automatically turn off device after fan-only timeout", () => {
+      mockClimateEntity.state = "cool";
+      mockSensorEntity.state = 1400;
+      const increment = {
+        delta: -1250,
+        modeChange: "fan_only" as const,
+      };
+
+      device.decreaseConsumptionBy(increment);
+
+      // Fast-forward time to trigger timeout
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs);
+
+      expect(mockClimateEntity.turnOff).toHaveBeenCalledTimes(1);
+    });
+
+    it("should clear timeout when transitioning away from fan-only mode", () => {
+      // Test uses internal timeout mechanism rather than state machine interactions
+      // since that would be tested in integration tests
+      
+      // Start with device in fan-only mode (simulating already completed transition)
+      mockClimateEntity.state = "fan_only";
+      mockSensorEntity.state = 150;
+      
+      // Create device and manually trigger fan-only timeout to verify it works
+      const testDevice = new ClimateDevice(
+        "Test Climate Device",
+        1,
+        mockClimateEntity,
+        mockSensorEntity,
+        config,
+        hassControls,
+      );
+      
+      // Access private method through any casting to start timeout
+      (testDevice as any).startFanOnlyTimeout();
+      
+      // Move forward halfway through timeout
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs / 2);
+      
+      // Clear timeout (simulating mode change)
+      (testDevice as any).clearFanOnlyTimeout();
+      
+      // Fast-forward past when timeout would have triggered
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs + 1000);
+
+      // Device should NOT be turned off (timeout was cleared)
+      expect(mockClimateEntity.turnOff).not.toHaveBeenCalled();
+    });
+
+    it("should clear timeout when stop is called", () => {
+      // Transition to fan-only
+      mockClimateEntity.state = "cool";
+      mockSensorEntity.state = 1400;
+      const increment = {
+        delta: -1250,
+        modeChange: "fan_only" as const,
+      };
+      device.decreaseConsumptionBy(increment);
+
+      // Call stop before timeout
+      device.stop();
+
+      // Fast-forward past timeout
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs + 1000);
+
+      // turnOff should only be called once (from stop method), not from timeout
+      expect(mockClimateEntity.turnOff).toHaveBeenCalledTimes(1);
+    });
+
+    it("should reset state machine after automatic timeout", () => {
+      mockClimateEntity.state = "cool";
+      mockSensorEntity.state = 1400;
+      const increment = {
+        delta: -1250,
+        modeChange: "fan_only" as const,
+      };
+
+      device.decreaseConsumptionBy(increment);
+
+      // Verify we're in pending state initially
+      expect(device.changeState?.type).toBe("decrease");
+
+      // Fast-forward to trigger timeout
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs);
+
+      // State should be reset after automatic off
+      expect(device.changeState).toBeUndefined();
+    });
+
+    it("should handle multiple fan-only timeout starts by clearing previous timeout", () => {
+      // Test internal timeout reset behavior directly
+      mockClimateEntity.state = "fan_only";
+      mockSensorEntity.state = 150;
+      
+      const testDevice = new ClimateDevice(
+        "Test Climate Device",
+        1,
+        mockClimateEntity,
+        mockSensorEntity,
+        config,
+        hassControls,
+      );
+      
+      // Start first timeout
+      (testDevice as any).startFanOnlyTimeout();
+      
+      // Move forward partway through first timeout
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs / 2);
+      
+      // Start second timeout (should clear the first)
+      (testDevice as any).startFanOnlyTimeout();
+
+      // Advance to when the first timeout would have triggered
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs / 2 + 1000);
+
+      // Device should NOT be turned off yet (first timer was cleared)
+      expect(mockClimateEntity.turnOff).not.toHaveBeenCalled();
+
+      // Advance to complete the second timeout period
+      vi.advanceTimersByTime(config.fanOnlyTimeoutMs / 2);
+
+      // Now device should be turned off
+      expect(mockClimateEntity.turnOff).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("Configuration", () => {
     it("should accept valid configuration", () => {
       expect(() => new ClimateDevice(
+        "Test Climate Device",
+        1,
         mockClimateEntity,
         mockSensorEntity,
         config,
@@ -701,6 +850,8 @@ describe("ClimateDevice", () => {
       };
 
       expect(() => new ClimateDevice(
+        "Test Climate Device",
+        1,
         mockClimateEntity,
         mockSensorEntity,
         config,

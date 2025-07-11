@@ -2,11 +2,12 @@ import type { TServiceParams } from "@digital-alchemy/core";
 import { BooleanDevice } from "./devices/boolean_device";
 import { Device } from "./devices/device";
 import { PICK_ENTITY } from "@digital-alchemy/hass";
+import { ClimateDeviceOptions } from "./devices/climate_device";
 
 type BaseDeviceConfig = {
   priority: number; // Priority for load management (lower number = higher priority)
   name: string; // Unique identifier for the device (used in logs and state tracking)
-  minCycleTime?: number; // Minimum cycle time in minutes (optional)
+  // minCycleTime?: number; // Minimum cycle time in minutes (optional)
   // minRuntimePerDay?: number; // Minimum time per day in minutes (optional) << E.g. towel rail needs to be on for at least 4 hours per day
 };
 
@@ -23,11 +24,7 @@ type ClimateDeviceConfig = {
   kind: "climate";
   entityId: PICK_ENTITY<"climate">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
-  fanOnlyExpectedConsumption: number;
-  heatMinExpectedConsumption: number;
-  coolMinExpectedConsumption: number;
-  heatMaxExpectedConsumption: number;
-  coolMaxExpectedConsumption: number;
+  opts: Omit<ClimateDeviceOptions, keyof BaseDeviceConfig>;
 };
 
 type HumidifierDeviceConfig = {
@@ -101,13 +98,28 @@ const devices: DeviceConfig[] = [
     kind: "climate",
     entityId: "climate.hallway",
     consumptionEntityId: "sensor.air_conditioning_power",
-    priority: 1,
     name: "Hallway Climate",
-    fanOnlyExpectedConsumption: 50,
-    heatMinExpectedConsumption: 300,
-    coolMinExpectedConsumption: 300,
-    heatMaxExpectedConsumption: 2200,
-    coolMaxExpectedConsumption: 2200,
+    priority: 1,
+    opts: {
+      // Temperature Constraints
+      minSetpoint: 16,
+      maxSetpoint: 30,
+      setpointStep: 1.0,
+
+      // Power Configuration
+      compressorStartupMinConsumption: 300,
+      powerOnSetpointOffset: 2.0,
+      consumptionPerDegree: 150,
+      maxCompressorConsumption: 2200,
+      fanOnlyMinConsumption: 50,
+      heatCoolMinConsumption: 300,
+
+      // Timing Configuration
+      setpointDebounceMs: 5 * 60_000,     // 5 minutes
+      modeDebounceMs: 10 * 60_000,        // 10 minutes
+      startupDebounceMs: 10 * 60_000,     // 10 minutes
+      fanOnlyTimeoutMs: 60 * 60_000,      // 60 minutes
+    }
   },
 ];
 

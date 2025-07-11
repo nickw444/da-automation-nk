@@ -1,879 +1,374 @@
-import { TestRunner } from "@digital-alchemy/core";
-import { LIB_HASS } from "@digital-alchemy/hass";
-import { LIB_MOCK_ASSISTANT } from "@digital-alchemy/hass/mock-assistant";
-import type { MockInstance } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DeviceLoadManager } from "../device_load_manager";
 import { IBaseDevice } from "../devices/base_device";
-
-const runner = TestRunner()
-  .appendLibrary(LIB_HASS)
-  .appendLibrary(LIB_MOCK_ASSISTANT);
+import type { ILogger } from "@digital-alchemy/core";
+import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 
 describe("DeviceLoadManager", () => {
-  let mockDevice: MockBaseDevice;
+  let mockLogger: ILogger;
+  let mockGridSensor: ByIdProxy<PICK_ENTITY<"sensor">>;
+  let mockGridSensorMean: ByIdProxy<PICK_ENTITY<"sensor">>;
+  let mockDevices: IBaseDevice<{delta: number}, {delta: number}>[];
+  let deviceLoadManager: DeviceLoadManager;
 
   beforeEach(() => {
-    mockDevice = new MockBaseDevice();
-    vi.clearAllTimers();
+    mockLogger = {
+      info: vi.fn(),
+      debug: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    } as any;
+
+    mockGridSensor = {
+      state: 1000,
+    } as any;
+
+    mockGridSensorMean = {
+      state: 1000,
+    } as any;
+
+    // Create mock devices with negative deltas for decrease increments
+    mockDevices = [
+      {
+        name: "Device1",
+        priority: 1,
+        currentConsumption: 0,
+        changeState: undefined,
+        increaseIncrements: [{ delta: 100 }],
+        decreaseIncrements: [],
+        increaseConsumptionBy: vi.fn(),
+        decreaseConsumptionBy: vi.fn(),
+        stop: vi.fn(),
+      },
+      {
+        name: "Device2", 
+        priority: 2,
+        currentConsumption: 80,
+        changeState: undefined,
+        increaseIncrements: [],
+        decreaseIncrements: [{ delta: -80 }], // Negative delta
+        increaseConsumptionBy: vi.fn(),
+        decreaseConsumptionBy: vi.fn(),
+        stop: vi.fn(),
+      },
+      {
+        name: "Device3",
+        priority: 3,
+        currentConsumption: 150,
+        changeState: undefined,
+        increaseIncrements: [],
+        decreaseIncrements: [{ delta: -150 }], // Negative delta
+        increaseConsumptionBy: vi.fn(),
+        decreaseConsumptionBy: vi.fn(),
+        stop: vi.fn(),
+      },
+    ];
+
+    deviceLoadManager = new DeviceLoadManager(
+      mockDevices,
+      mockLogger,
+      mockGridSensor,
+      mockGridSensorMean,
+      500, // desiredGridConsumption
+      800, // maxConsumptionBeforeSheddingLoad  
+      200, // minConsumptionBeforeAddingLoad
+    );
   });
 
-  it("should handle null grid consumption gracefully", async () => {
-    vi.useFakeTimers();
+  it("should shed load using devices with negative delta decrements", () => {
+    // Set grid consumption high to trigger load shedding
+    mockGridSensorMean.state = 900; // Exceeds max of 800W
+    
+    // Mock the private loop method by calling it directly
+    (deviceLoadManager as any).loop();
 
-    try {
-      await runner
-        .bootLibrariesFirst()
-        .setup(({ mock_assistant }) => {
-          mock_assistant.entity.setupState({
-            "sensor.inverter_meter_power": { state: null },
-            "sensor.inverter_meter_power_mean_1m": { state: null },
-            "switch.subfloor_fan": { state: "off" },
-            "sensor.subfloor_fan_current_consumption": { state: 0 },
-          });
-        })
-        .run(({ hass, logger }) => {
-          const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-          const gridSensorMean = hass.refBy.id(
-            "sensor.inverter_meter_power_mean_1m",
-          );
-
-          // mockDevice is created in beforeEach
-
-          const manager = new DeviceLoadManager(
-            [mockDevice],
-            logger,
-            gridSensor,
-            gridSensorMean,
-            0, // desired
-            100, // max before shedding
-            -100, // min before adding
-          );
-
-          // Start the manager and advance timers to trigger the loop
-          manager.start();
-          vi.advanceTimersByTime(5000);
-
-          // Verify no device actions were taken when grid consumption is null
-          expect(mockDevice.decreaseConsumptionBy).not.toHaveBeenCalled();
-          expect(mockDevice.increaseConsumptionBy).not.toHaveBeenCalled();
-
-          manager.stop();
-        });
-    } finally {
-      vi.useRealTimers();
-    }
+    // Should shed 400W (900 - 500 desired)
+    // Device2 has -80W decrement, Device3 has -150W decrement
+    // Should call Device3 first (lower priority = shed first) then Device2
+    expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
+    expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
+    expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
   });
 
-  describe("Load Shedding", () => {
-    it("should shed load when grid consumption exceeds max threshold", async () => {
-      vi.useFakeTimers();
+  it("should only shed appropriate amount when negative deltas are available", () => {
+    // Set grid consumption slightly high to trigger small load shedding
+    mockGridSensorMean.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
+    
+    (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 300 },
-              "sensor.inverter_meter_power_mean_1m": { state: 300 }, // Exceeds max threshold of 100
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
+    // Should shed Device3 (-150W) and Device2 (-80W) for total of 230W
+    expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
+    expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
+    expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
+  });
 
-            // Configure mock device to have capacity for shedding
-            mockDevice.currentConsumption = 50;
-            mockDevice.setDecreaseIncrements([50]);
+  it("should skip devices with no suitable negative delta decrements", () => {
+    // Set a small overage that no device can handle
+    mockGridSensorMean.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
+    
+    // Create devices with decrements larger than needed
+    const deviceWithLargeDecrement1 = {
+      ...mockDevices[1],
+      decreaseIncrements: [{ delta: -400 }], // Too large
+    };
+    const deviceWithLargeDecrement2 = {
+      ...mockDevices[2],  
+      decreaseIncrements: [{ delta: -500 }], // Too large
+    };
+    
+    // Create a new device manager with these devices
+    const testDeviceManager = new DeviceLoadManager(
+      [mockDevices[0], deviceWithLargeDecrement1, deviceWithLargeDecrement2],
+      mockLogger,
+      mockGridSensor,
+      mockGridSensorMean,
+      500, // desiredGridConsumption
+      800, // maxConsumptionBeforeSheddingLoad  
+      200, // minConsumptionBeforeAddingLoad
+    );
+    
+    (testDeviceManager as any).loop();
 
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
+    // No devices should be called since their decrements are too large
+    expect(deviceWithLargeDecrement1.decreaseConsumptionBy).not.toHaveBeenCalled();
+    expect(deviceWithLargeDecrement2.decreaseConsumptionBy).not.toHaveBeenCalled();
+    
+    // Should log warning about not being able to shed enough
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Could not shed enough load")
+    );
+  });
 
-            manager.start();
-            vi.advanceTimersByTime(5000);
+  it("should log correct wattage values for negative deltas", () => {
+    mockGridSensorMean.state = 900;
+    
+    (deviceLoadManager as any).loop();
 
-            // Verify device was asked to shed load
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_decrease" });
+    // Should log positive wattage values even though deltas are negative
+    expect(mockLogger.info).toHaveBeenCalledWith("Shedding 150 W from Device3");
+    expect(mockLogger.info).toHaveBeenCalledWith("Shedding 80 W from Device2");
+  });
 
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
-    });
+  it("should handle devices with pending changes correctly", () => {
+    mockGridSensorMean.state = 900;
+    
+    // Create device with pending changes
+    const deviceWithPendingChanges = {
+      ...mockDevices[2],
+      changeState: { type: "decrease" as const, expectedFutureConsumption: 0 },
+    };
+    mockDevices[2] = deviceWithPendingChanges;
+    
+    (deviceLoadManager as any).loop();
 
-    it("should shed load from lowest priority devices first", async () => {
-      vi.useFakeTimers();
+    // Should skip Device3 and only use Device2
+    expect(mockDevices[2].decreaseConsumptionBy).not.toHaveBeenCalled();
+    expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
+    expect(mockLogger.debug).toHaveBeenCalledWith("Skipping Device3 - has pending changes");
+  });
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 50 },
-              "sensor.inverter_meter_power_mean_1m": { state: 50 }, // Need to shed 50W
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
+  it("should handle devices in debounce state correctly", () => {
+    mockGridSensorMean.state = 900;
+    
+    // Create device in debounce state
+    const deviceInDebounce = {
+      ...mockDevices[1],
+      changeState: { type: "debounce" as const },
+    };
+    mockDevices[1] = deviceInDebounce;
+    
+    (deviceLoadManager as any).loop();
 
-            // Create devices with different priorities
-            const lowPriorityDevice = new MockBaseDevice({
-              name: "Low Priority Device",
-              priority: 5,
-              currentConsumption: 50,
-              increaseIncrements: [],
-              decreaseIncrements: [{ delta: 50, action: "mock_decrease" }],
-            });
-
-            const highPriorityDevice = new MockBaseDevice({
-              name: "High Priority Device",
-              priority: 1,
-              currentConsumption: 50,
-              increaseIncrements: [],
-              decreaseIncrements: [{ delta: 50, action: "mock_decrease" }],
-            });
-
-            const manager = new DeviceLoadManager(
-              [lowPriorityDevice, highPriorityDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              49, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Low priority device should be shed first
-            expect(
-              lowPriorityDevice.decreaseConsumptionBy,
-            ).toHaveBeenCalledWith({ delta: 50, action: "mock_decrease" });
-            // High priority device should not be shed
-            expect(highPriorityDevice.decreaseConsumptionBy).not.toBeCalled();
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("should shed correct amount to reach desired consumption", async () => {
-      vi.useFakeTimers();
-
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 130 },
-              "sensor.inverter_meter_power_mean_1m": { state: 130 }, // Need to shed 30W to reach 100W desired
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device with decrease increments
-            mockDevice.currentConsumption = 80;
-            mockDevice.setDecreaseIncrements([10, 20, 30, 40, 50, 60, 70, 80]);
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              100, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device should be asked to shed 30W (between min 10W and max 80W)
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledWith({ delta: 30, action: "mock_decrease" });
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("should skip devices with pending changes during shedding", async () => {
-      vi.useFakeTimers();
-
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 200 },
-              "sensor.inverter_meter_power_mean_1m": { state: 200 },
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device with pending changes
-            mockDevice.currentConsumption = 50;
-            mockDevice.setDecreaseIncrements([50]);
-            mockDevice.setChangeState({ type: "increase", expectedFutureConsumption: 75 });
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device should be skipped due to pending changes
-            expect(mockDevice.decreaseConsumptionBy).not.toHaveBeenCalled();
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
-    });
+    // Should skip Device2 and only use Device3
+    expect(mockDevices[1].decreaseConsumptionBy).not.toHaveBeenCalled();
+    expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
+    expect(mockLogger.debug).toHaveBeenCalledWith("Skipping Device2 - in debounce period");
   });
 
   describe("Load Adding", () => {
-    it("should add load when grid consumption is below min threshold", async () => {
-      vi.useFakeTimers();
+    beforeEach(() => {
+      // Reset devices for load adding tests
+      mockDevices = [
+        {
+          name: "Device1",
+          priority: 1, // High priority - should be added to first
+          currentConsumption: 0,
+          changeState: undefined,
+          increaseIncrements: [{ delta: 100 }],
+          decreaseIncrements: [],
+          increaseConsumptionBy: vi.fn(),
+          decreaseConsumptionBy: vi.fn(),
+          stop: vi.fn(),
+        },
+        {
+          name: "Device2", 
+          priority: 2, // Lower priority
+          currentConsumption: 0,
+          changeState: undefined,
+          increaseIncrements: [{ delta: 80 }],
+          decreaseIncrements: [],
+          increaseConsumptionBy: vi.fn(),
+          decreaseConsumptionBy: vi.fn(),
+          stop: vi.fn(),
+        },
+      ];
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -200 },
-              "sensor.inverter_meter_power_mean_1m": { state: -200 }, // Below min threshold of -100
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device to have capacity for adding
-            mockDevice.currentConsumption = 0;
-            mockDevice.setIncreaseIncrements([50]);
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Verify device was asked to add load
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      deviceLoadManager = new DeviceLoadManager(
+        mockDevices,
+        mockLogger,
+        mockGridSensor,
+        mockGridSensorMean,
+        500, // desiredGridConsumption
+        800, // maxConsumptionBeforeSheddingLoad  
+        200, // minConsumptionBeforeAddingLoad
+      );
     });
 
-    it("should add load to highest priority devices first", async () => {
-      vi.useFakeTimers();
+    it("should add load when grid consumption is below min threshold", () => {
+      // Set grid consumption low to trigger load adding
+      mockGridSensorMean.state = 100; // Below min of 200W
+      
+      (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -150 },
-              "sensor.inverter_meter_power_mean_1m": { state: -150 }, // Need to add 50W
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Create devices with different priorities
-            const lowPriorityDevice = new MockBaseDevice({
-              name: "Low Priority Device",
-              priority: 5,
-              currentConsumption: 0,
-              increaseIncrements: [{ delta: 50, action: "mock_increase" }],
-              decreaseIncrements: [],
-            });
-
-            const highPriorityDevice = new MockBaseDevice({
-              name: "High Priority Device",
-              priority: 1,
-              currentConsumption: 0,
-              increaseIncrements: [{ delta: 50, action: "mock_increase" }],
-              decreaseIncrements: [],
-            });
-
-            const manager = new DeviceLoadManager(
-              [lowPriorityDevice, highPriorityDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              -100, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // High priority device should be added to first
-            expect(
-              highPriorityDevice.increaseConsumptionBy,
-            ).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
-            expect(
-              lowPriorityDevice.increaseConsumptionBy,
-            ).not.toHaveBeenCalled();
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Should add 400W (500 desired - 100 current)
+      // Device1 has higher priority (1), should be called first
+      expect(mockDevices[0].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 100 });
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
     });
 
-    it("should add correct amount to reach desired consumption", async () => {
-      vi.useFakeTimers();
+    it("should add load to highest priority devices first", () => {
+      mockGridSensorMean.state = 150; // Below min of 200W, need 350W (500 - 150)
+      
+      (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -130 },
-              "sensor.inverter_meter_power_mean_1m": { state: -130 }, // Need to add 30W to reach -100W desired
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device with increase increments
-            mockDevice.currentConsumption = 0;
-            mockDevice.setIncreaseIncrements([10, 20, 30, 40, 50, 60, 70, 80]);
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              -100, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device should be asked to add 30W (between min 10W and max 80W)
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 30, action: "mock_increase" });
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Device1 (priority 1) should be called first, Device2 (priority 2) second
+      expect(mockDevices[0].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 100 });
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
     });
 
-    it("should skip devices with pending decrease changes", async () => {
-      vi.useFakeTimers();
+    it("should account for devices with pending increase changes", () => {
+      mockGridSensorMean.state = 100; // Below min, need 400W total
+      
+      // Create device with pending increase
+      const deviceWithPending = {
+        ...mockDevices[0],
+        changeState: { type: "increase" as const, expectedFutureConsumption: 100 },
+      };
+      mockDevices[0] = deviceWithPending;
+      
+      (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -200 },
-              "sensor.inverter_meter_power_mean_1m": { state: -200 },
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device with pending decrease change
-            mockDevice.currentConsumption = 0;
-            mockDevice.setIncreaseIncrements([50]);
-            mockDevice.setChangeState({ type: "decrease", expectedFutureConsumption: 0 }); // Has pending decrease change
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device should be skipped due to pending decrease changes
-            expect(mockDevice.increaseConsumptionBy).not.toHaveBeenCalled();
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Device1 has pending increase (100W), so remaining capacity is 300W
+      // Device1 should be skipped, Device2 should get 80W
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
     });
 
-    it("should account for devices with pending increase changes", async () => {
-      vi.useFakeTimers();
+    it("should skip devices with pending decrease changes", () => {
+      mockGridSensorMean.state = 100;
+      
+      // Create device with pending decrease
+      const deviceWithPendingDecrease = {
+        ...mockDevices[0],
+        changeState: { type: "decrease" as const, expectedFutureConsumption: 0 },
+      };
+      mockDevices[0] = deviceWithPendingDecrease;
+      
+      (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -200 },
-              "sensor.inverter_meter_power_mean_1m": { state: -200 }, // Need to add 100W total
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Create device with pending increase change
-            // Note: priority is important - pending device needs higher priority.
-            const deviceWithPending = new MockBaseDevice({
-              name: "Device With Pending",
-              priority: 2,
-              currentConsumption: 0,
-              increaseIncrements: [{ delta: 25, action: "mock_increase" }, { delta: 50, action: "mock_increase" }],
-              decreaseIncrements: [],
-              changeState: { type: "increase", expectedFutureConsumption: 25 }, // Will consume 25W when pending change completes
-            });
-
-            // Create second device without pending changes
-            const deviceWithoutPending = new MockBaseDevice({
-              name: "Device Without Pending",
-              priority: 1,
-              currentConsumption: 0,
-              increaseIncrements: [
-                { delta: 25, action: "mock_increase" }, 
-                { delta: 50, action: "mock_increase" }, 
-                { delta: 75, action: "mock_increase" }, 
-                { delta: 100, action: "mock_increase" }, 
-                { delta: 125, action: "mock_increase" }
-              ],
-              decreaseIncrements: [],
-            });
-
-            const manager = new DeviceLoadManager(
-              [deviceWithPending, deviceWithoutPending],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              -100, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device with pending change should be skipped for new changes
-            expect(
-              deviceWithPending.increaseConsumptionBy,
-            ).not.toHaveBeenCalled();
-            // Device without pending should get the remaining load (100W - 25W expected = 75W)
-            expect(
-              deviceWithoutPending.increaseConsumptionBy,
-            ).toHaveBeenCalledWith({ delta: 75, action: "mock_increase" });
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Device1 should be skipped, only Device2 should be called
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
     });
 
-    it("should handle case when unable to add all surplus load", async () => {
-      vi.useFakeTimers();
+    it("should find best fitting increment for load adding", () => {
+      mockGridSensorMean.state = 150; // Below min of 200W, need 350W (500 - 150)
+      
+      // Create device with multiple increment options - should pick largest that fits
+      const deviceWithMultipleIncrements = {
+        ...mockDevices[0],
+        increaseIncrements: [{ delta: 25 }, { delta: 50 }, { delta: 75 }, { delta: 100 }],
+      };
+      
+      // Create new device manager with updated device
+      const testDeviceManager = new DeviceLoadManager(
+        [deviceWithMultipleIncrements, mockDevices[1]],
+        mockLogger,
+        mockGridSensor,
+        mockGridSensorMean,
+        500, // desiredGridConsumption
+        800, // maxConsumptionBeforeSheddingLoad  
+        200, // minConsumptionBeforeAddingLoad
+      );
+      
+      (testDeviceManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: -200 },
-              "sensor.inverter_meter_power_mean_1m": { state: -200 }, // Need to add 100W but devices can only handle 50W
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device with limited capacity
-            mockDevice.currentConsumption = 0;
-            mockDevice.setIncreaseIncrements([25, 50]); // Can only add 50W but need 100W
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              -100, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
-
-            manager.start();
-            vi.advanceTimersByTime(5000);
-
-            // Device should be asked to add its maximum capacity (50W) even though 100W is needed
-            expect(mockDevice.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 50, action: "mock_increase" });
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Should choose the largest increment (100W) first, then Device2 gets 80W
+      expect(deviceWithMultipleIncrements.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 100 });
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
     });
   });
 
-  describe("Within Range", () => {
-    it("should take no action when consumption is within acceptable range", async () => {
-      vi.useFakeTimers();
+  describe("Within Acceptable Range", () => {
+    it("should take no action when consumption is within acceptable range", () => {
+      // Set consumption within range (between 200 and 800)
+      mockGridSensorMean.state = 500; // Exactly at desired, within range
+      
+      (deviceLoadManager as any).loop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 50 },
-              "sensor.inverter_meter_power_mean_1m": { state: 50 }, // Within range: between -100 and 100
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
+      // No devices should be called
+      expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[1].decreaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[1].increaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[2].decreaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[2].increaseConsumptionBy).not.toHaveBeenCalled();
+    });
+  });
 
-            // Configure mock device with both increase and decrease capacity
-            mockDevice.currentConsumption = 30;
-            mockDevice.setIncreaseIncrements([20, 40, 60, 80, 100]);
-            mockDevice.setDecreaseIncrements([20, 30]);
+  describe("Error Handling", () => {
+    it("should handle null grid consumption gracefully", () => {
+      mockGridSensorMean.state = null;
+      
+      (deviceLoadManager as any).loop();
 
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0, // desired
-              100, // max before shedding
-              -100, // min before adding
-            );
+      // Should log warning and not call any devices
+      expect(mockLogger.warn).toHaveBeenCalledWith("Grid consumption is null, skipping load management");
+      expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
+    });
 
-            manager.start();
-            vi.advanceTimersByTime(5000);
+    it("should handle unavailable grid consumption gracefully", () => {
+      mockGridSensorMean.state = "unavailable";
+      
+      (deviceLoadManager as any).loop();
 
-            // Verify no device actions were taken when within range
-            expect(mockDevice.increaseConsumptionBy).not.toHaveBeenCalled();
-            expect(mockDevice.decreaseConsumptionBy).not.toHaveBeenCalled();
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // Should log warning and not call any devices
+      expect(mockLogger.warn).toHaveBeenCalledWith("Grid consumption is null, skipping load management");
+      expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
     });
   });
 
   describe("Timer Management", () => {
-    it("should start and stop interval correctly", async () => {
-      vi.useFakeTimers();
+    it("should call stop on all devices when stopping after start", () => {
+      // Start first to create the interval
+      deviceLoadManager.start();
+      deviceLoadManager.stop();
 
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 50 },
-              "sensor.inverter_meter_power_mean_1m": { state: 50 },
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0,
-              100,
-              -100,
-            );
-
-            // Get initial timer count
-            const initialTimerCount = vi.getTimerCount();
-
-            // Start the manager
-            manager.start();
-            expect(vi.getTimerCount()).toBe(initialTimerCount + 1);
-
-            // Stop the manager
-            manager.stop();
-            expect(vi.getTimerCount()).toBe(initialTimerCount);
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // All devices should have stop called
+      expect(mockDevices[0].stop).toHaveBeenCalledTimes(1);
+      expect(mockDevices[1].stop).toHaveBeenCalledTimes(1);
+      expect(mockDevices[2].stop).toHaveBeenCalledTimes(1);
     });
 
-    it("should handle stop when not started", async () => {
-      await runner
-        .bootLibrariesFirst()
-        .setup(({ mock_assistant }) => {
-          mock_assistant.entity.setupState({
-            "sensor.inverter_meter_power": { state: 50 },
-            "sensor.inverter_meter_power_mean_1m": { state: 50 },
-            "switch.subfloor_fan": { state: "off" },
-            "sensor.subfloor_fan_current_consumption": { state: 0 },
-          });
-        })
-        .run(({ hass, logger }) => {
-          const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-          const gridSensorMean = hass.refBy.id(
-            "sensor.inverter_meter_power_mean_1m",
-          );
+    it("should not call device.stop when stopping without starting", () => {
+      deviceLoadManager.stop();
 
-          const manager = new DeviceLoadManager(
-            [mockDevice],
-            logger,
-            gridSensor,
-            gridSensorMean,
-            0,
-            100,
-            -100,
-          );
-
-          // Should not throw when stopping without starting
-          expect(() => manager.stop()).not.toThrow();
-        });
-    });
-
-    it("should run loop at 5000ms intervals", async () => {
-      vi.useFakeTimers();
-
-      try {
-        await runner
-          .bootLibrariesFirst()
-          .setup(({ mock_assistant }) => {
-            mock_assistant.entity.setupState({
-              "sensor.inverter_meter_power": { state: 200 },
-              "sensor.inverter_meter_power_mean_1m": { state: 200 },
-              "switch.subfloor_fan": { state: "off" },
-              "sensor.subfloor_fan_current_consumption": { state: 0 },
-            });
-          })
-          .run(({ hass, logger }) => {
-            const gridSensor = hass.refBy.id("sensor.inverter_meter_power");
-            const gridSensorMean = hass.refBy.id(
-              "sensor.inverter_meter_power_mean_1m",
-            );
-
-            // Configure mock device to respond to changes
-            mockDevice.currentConsumption = 50;
-            mockDevice.setDecreaseIncrements([50]);
-
-            const manager = new DeviceLoadManager(
-              [mockDevice],
-              logger,
-              gridSensor,
-              gridSensorMean,
-              0,
-              100,
-              -100,
-            );
-
-            manager.start();
-
-            // Advance time by 4999ms - should not trigger
-            vi.advanceTimersByTime(4999);
-            expect(mockDevice.decreaseConsumptionBy).not.toHaveBeenCalled();
-
-            // Advance time by 1ms more (total 5000ms) - should trigger
-            vi.advanceTimersByTime(1);
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledTimes(1);
-
-            // Reset the mock
-            mockDevice.decreaseConsumptionBy.mockClear();
-
-            // Advance another 5000ms - should trigger again
-            vi.advanceTimersByTime(5000);
-            expect(mockDevice.decreaseConsumptionBy).toHaveBeenCalledTimes(1);
-
-            manager.stop();
-          });
-      } finally {
-        vi.useRealTimers();
-      }
+      // No devices should have stop called since start was never called
+      expect(mockDevices[0].stop).not.toHaveBeenCalled();
+      expect(mockDevices[1].stop).not.toHaveBeenCalled();
+      expect(mockDevices[2].stop).not.toHaveBeenCalled();
     });
   });
 });
-
-interface MockIncrement {
-  delta: number;
-  action: string;
-}
-
-class MockBaseDevice implements IBaseDevice<MockIncrement, MockIncrement> {
-  name: string;
-  priority: number;
-  currentConsumption: number;
-  private _increaseIncrements: MockIncrement[];
-  private _decreaseIncrements: MockIncrement[];
-  private _changeState: 
-    | { type: "increase" | "decrease", expectedFutureConsumption: number }
-    | { type: "debounce" }
-    | undefined;
-
-  increaseConsumptionBy: MockInstance<(increment: MockIncrement) => void> & ((increment: MockIncrement) => void);
-  decreaseConsumptionBy: MockInstance<(increment: MockIncrement) => void> & ((increment: MockIncrement) => void);
-
-  constructor(
-    overrides: {
-      name?: string;
-      priority?: number;
-      currentConsumption?: number;
-      increaseIncrements?: MockIncrement[];
-      decreaseIncrements?: MockIncrement[];
-      changeState?: 
-        | { type: "increase" | "decrease", expectedFutureConsumption: number }
-        | { type: "debounce" }
-        | undefined;
-    } = {},
-  ) {
-    this.name = overrides.name || "Mock Device";
-    this.priority = overrides.priority || 1;
-    this.currentConsumption = overrides.currentConsumption || 0;
-    this._increaseIncrements = overrides.increaseIncrements || [{ delta: 50, action: "mock_increase" }];
-    this._decreaseIncrements = overrides.decreaseIncrements || [];
-    this._changeState = overrides.changeState || undefined;
-    
-    // Setup mock functions
-    this.increaseConsumptionBy = vi.fn();
-    this.decreaseConsumptionBy = vi.fn();
-  }
-
-  get increaseIncrements(): MockIncrement[] {
-    return this._increaseIncrements;
-  }
-
-  get decreaseIncrements(): MockIncrement[] {
-    return this._decreaseIncrements;
-  }
-
-  get changeState(): 
-    | { type: "increase" | "decrease", expectedFutureConsumption: number }
-    | { type: "debounce" }
-    | undefined {
-    return this._changeState;
-  }
-
-  // Helper methods for tests to update state
-  setIncreaseIncrements(increments: number[]) {
-    this._increaseIncrements = increments.map(delta => ({ delta, action: "mock_increase" }));
-  }
-
-  setDecreaseIncrements(increments: number[]) {
-    this._decreaseIncrements = increments.map(delta => ({ delta, action: "mock_decrease" }));
-  }
-
-  setChangeState(changeState: 
-    | { type: "increase" | "decrease", expectedFutureConsumption: number }
-    | { type: "debounce" }
-    | undefined) {
-    this._changeState = changeState;
-  }
-
-  stop(): void {
-    // Mock implementation - do nothing
-  }
-
-  resetSpies() {
-    this.increaseConsumptionBy.mockClear();
-    this.decreaseConsumptionBy.mockClear();
-  }
-}

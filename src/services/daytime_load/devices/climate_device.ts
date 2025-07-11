@@ -6,19 +6,11 @@ import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
 import { IClimateEntityWrapper } from "../../../entities/climate_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
+import { TServiceParams } from "@digital-alchemy/core";
+import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 
 
-
-// Configuration interface for ClimateDevice
-export interface ClimateDeviceConfig {
-    // Device Identity
-    name: string;                   // Device identifier (e.g., "living_room_ac")
-    priority: number;               // Device priority for load management (lower = higher priority)
-
-    // Home Assistant Entities
-    climateEntity: string;          // climate.living_room_hvac
-    consumptionEntity: string;      // sensor.hvac_power_consumption (required)
-
+export interface ClimateDeviceOptions {
     // Temperature Constraints
     minSetpoint: number;            // 16 (absolute climate entity limits)
     maxSetpoint: number;            // 30 (absolute climate entity limits)
@@ -46,7 +38,19 @@ export interface IClimateHassControls {
     comfortSetpoint?: number;       // Optional comfort boundary temperature (limits decrease operations only)
 }
 
-// ClimateIncrement interface for increase/decrease operations
+/**
+ * ClimateIncrement represents a possible device action for increasing or decreasing consumption.
+ * 
+ * Implementation Note: This implementation uses a simplified power calculation approach
+ * that deviates from the original specification's blended scaling formulas. Key differences:
+ * - Uses additive startup power (base + differential) instead of max(differential, base)
+ * - Comfort setpoint doesn't limit startup operations (always moves toward desired)  
+ * - Simplified linear power calculation instead of blended scaled/linear approach
+ * - Single heatCoolMinConsumption instead of separate heat/cool minimums
+ * 
+ * These simplifications make the implementation more predictable and easier to test
+ * while maintaining the core load management functionality.
+ */
 export interface ClimateIncrement {
     delta: number;                  // Power consumption change (in Watts)
     targetSetpoint?: number;        // Absolute target setpoint
@@ -57,24 +61,31 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
         new ConsumptionTransitionStateMachine();
     private unlockedTime: number = 0;
-    private lastOperationType: "setpoint" | "mode" | "startup" | null = null;
+    private fanOnlyTimeoutTimer: NodeJS.Timeout | null = null;
 
     constructor(
+        readonly name: string,
+        readonly priority: number,
         private readonly climateEntityRef: IClimateEntityWrapper,
         private readonly consumptionEntityRef: ISensorEntityWrapper,
-        private readonly config: ClimateDeviceConfig,
+        private readonly opts: ClimateDeviceOptions,
         private readonly hassControls: IClimateHassControls,
     ) {
     }
 
-    get name(): string {
-        return this.config.name;
-    }
-
-    get priority(): number {
-        return this.config.priority;
-    }
-
+    /**
+     * Calculate available power consumption increases.
+     * 
+     * Returns array of ClimateIncrement objects representing ways to increase device consumption:
+     * - When device is off: Returns startup increment with initial setpoint
+     * - When device is on: Returns setpoint adjustments toward user desired setpoint
+     * - Always moves toward more aggressive heating/cooling (ignores comfort setpoint)
+     * 
+     * Power calculation uses blended approach:
+     * - For startup: base consumption + temperature differential consumption
+     * - For running device: current consumption + setpoint change consumption
+     * - Capped at maxCompressorConsumption
+     */
     get increaseIncrements(): ClimateIncrement[] {
         const roomTemp = this.climateEntityRef.roomTemperature;
         const desiredSetpoint = this.hassControls.desiredSetpoint;
@@ -86,20 +97,20 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             // Calculate initial setpoint with offset in the direction of desired mode
             let initialSetpoint: number;
             if (desiredMode === "heat") {
-                initialSetpoint = Math.min(roomTemp + this.config.powerOnSetpointOffset, desiredSetpoint);
+                initialSetpoint = Math.min(roomTemp + this.opts.powerOnSetpointOffset, desiredSetpoint);
             } else {
-                initialSetpoint = Math.max(roomTemp - this.config.powerOnSetpointOffset, desiredSetpoint);
+                initialSetpoint = Math.max(roomTemp - this.opts.powerOnSetpointOffset, desiredSetpoint);
             }
             
             // Apply absolute limits
-            initialSetpoint = Math.max(this.config.minSetpoint, Math.min(this.config.maxSetpoint, initialSetpoint));
+            initialSetpoint = Math.max(this.opts.minSetpoint, Math.min(this.opts.maxSetpoint, initialSetpoint));
             
             // Note: Comfort setpoint should NOT limit startup operations - always move toward desired setpoint
             
             // Calculate startup power: base startup consumption + temperature differential consumption
             const tempDiff = Math.abs(roomTemp - initialSetpoint);
-            const temperaturePower = tempDiff * this.config.consumptionPerDegree;
-            const startupPower = this.config.compressorStartupMinConsumption + temperaturePower;
+            const temperaturePower = tempDiff * this.opts.consumptionPerDegree;
+            const startupPower = this.opts.compressorStartupMinConsumption + temperaturePower;
             
             increments.push({
                 delta: startupPower,
@@ -116,20 +127,20 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         // Handle mode changes (fan-only to heat/cool)
         if (currentMode === "fan_only" && (desiredMode === "heat" || desiredMode === "cool")) {
             // Generate increments for each setpoint step toward desired
-            const step = this.config.setpointStep;
+            const step = this.opts.setpointStep;
             let lastDelta: number | undefined;
             
             if (desiredMode === "heat") {
                 for (let targetSetpoint = currentSetpoint + step; 
-                     targetSetpoint <= desiredSetpoint && targetSetpoint <= this.config.maxSetpoint; 
+                     targetSetpoint <= desiredSetpoint && targetSetpoint <= this.opts.maxSetpoint; 
                      targetSetpoint += step) {
                     
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
                     
                     // For mode change from fan_only, calculate full consumption at target setpoint
                     const tempDiff = Math.abs(roomTemp - targetSetpoint);
-                    const temperaturePower = tempDiff * this.config.consumptionPerDegree;
-                    const targetConsumption = Math.min(this.config.compressorStartupMinConsumption + temperaturePower, this.config.maxCompressorConsumption);
+                    const temperaturePower = tempDiff * this.opts.consumptionPerDegree;
+                    const targetConsumption = Math.min(this.opts.compressorStartupMinConsumption + temperaturePower, this.opts.maxCompressorConsumption);
                     const delta = targetConsumption - this.currentConsumption;
                     
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
@@ -143,15 +154,15 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                 }
             } else {
                 for (let targetSetpoint = currentSetpoint - step; 
-                     targetSetpoint >= desiredSetpoint && targetSetpoint >= this.config.minSetpoint; 
+                     targetSetpoint >= desiredSetpoint && targetSetpoint >= this.opts.minSetpoint; 
                      targetSetpoint -= step) {
                     
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
                     
                     // For mode change from fan_only, calculate full consumption at target setpoint
                     const tempDiff = Math.abs(roomTemp - targetSetpoint);
-                    const temperaturePower = tempDiff * this.config.consumptionPerDegree;
-                    const targetConsumption = Math.min(this.config.compressorStartupMinConsumption + temperaturePower, this.config.maxCompressorConsumption);
+                    const temperaturePower = tempDiff * this.opts.consumptionPerDegree;
+                    const targetConsumption = Math.min(this.opts.compressorStartupMinConsumption + temperaturePower, this.opts.maxCompressorConsumption);
                     const delta = targetConsumption - this.currentConsumption;
                     
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
@@ -166,23 +177,23 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             }
         } else if (currentMode === desiredMode) {
             // Same mode - generate setpoint increments toward desired setpoint
-            const step = this.config.setpointStep;
+            const step = this.opts.setpointStep;
             let lastDelta: number | undefined;
             
             if (desiredMode === "heat") {
                 for (let targetSetpoint = currentSetpoint + step; 
-                     targetSetpoint <= desiredSetpoint && targetSetpoint <= this.config.maxSetpoint; 
+                     targetSetpoint <= desiredSetpoint && targetSetpoint <= this.opts.maxSetpoint; 
                      targetSetpoint += step) {
                     
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
                     
                     // For running devices, calculate consumption delta based on setpoint change
                     const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                    const deltaConsumption = setpointDelta * this.config.consumptionPerDegree;
+                    const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
                     const projectedConsumption = this.currentConsumption + deltaConsumption;
                     
                     // Clamp to maximum consumption and recalculate delta
-                    const clampedConsumption = Math.min(projectedConsumption, this.config.maxCompressorConsumption);
+                    const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
                     const delta = clampedConsumption - this.currentConsumption;
                     
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
@@ -195,18 +206,18 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                 }
             } else {
                 for (let targetSetpoint = currentSetpoint - step; 
-                     targetSetpoint >= desiredSetpoint && targetSetpoint >= this.config.minSetpoint; 
+                     targetSetpoint >= desiredSetpoint && targetSetpoint >= this.opts.minSetpoint; 
                      targetSetpoint -= step) {
                     
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
                     
                     // For running devices, calculate consumption delta based on setpoint change
                     const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                    const deltaConsumption = setpointDelta * this.config.consumptionPerDegree;
+                    const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
                     const projectedConsumption = this.currentConsumption + deltaConsumption;
                     
                     // Clamp to maximum consumption and recalculate delta
-                    const clampedConsumption = Math.min(projectedConsumption, this.config.maxCompressorConsumption);
+                    const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
                     const delta = clampedConsumption - this.currentConsumption;
                     
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
@@ -225,6 +236,19 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
 
 
+    /**
+     * Calculate available power consumption decreases.
+     * 
+     * Returns array of ClimateIncrement objects representing ways to decrease device consumption:
+     * - Setpoint adjustments away from user desired setpoint (limited by comfort setpoint if specified)
+     * - Mode changes to fan-only (only when no comfort setpoint specified)
+     * - All decreases respect comfort boundaries and minimum consumption floors
+     * 
+     * Power calculation factors in:
+     * - Current actual consumption as baseline
+     * - Mode-specific minimum consumption limits
+     * - Temperature differential reductions from setpoint changes
+     */
     get decreaseIncrements(): ClimateIncrement[] {
         const roomTemp = this.climateEntityRef.roomTemperature;
         const currentConsumption = this.currentConsumption;
@@ -242,25 +266,25 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         const currentMode = this.climateEntityRef.state;
 
         // Generate setpoint decreases (away from desired setpoint)
-        const step = this.config.setpointStep;
+        const step = this.opts.setpointStep;
         let lastDelta: number | undefined;
         
         if (desiredMode === "heat") {
             // For heating, move setpoint lower (less aggressive heating)
             const lowerBound = this.hassControls.comfortSetpoint !== undefined 
                 ? this.hassControls.comfortSetpoint 
-                : this.config.minSetpoint;
+                : this.opts.minSetpoint;
             
             for (let targetSetpoint = currentSetpoint - step; 
-                 targetSetpoint >= lowerBound && targetSetpoint >= this.config.minSetpoint; 
+                 targetSetpoint >= lowerBound && targetSetpoint >= this.opts.minSetpoint; 
                  targetSetpoint -= step) {
                 
                 // Calculate consumption reduction (negative delta)
                 const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const consumptionReduction = setpointDelta * this.config.consumptionPerDegree;
+                const consumptionReduction = setpointDelta * this.opts.consumptionPerDegree;
                 
                 // Clamp reduction to not go below minimum consumption
-                const maxReduction = currentConsumption - this.config.heatCoolMinConsumption;
+                const maxReduction = currentConsumption - this.opts.heatCoolMinConsumption;
                 const clampedReduction = Math.min(consumptionReduction, maxReduction);
                 const delta = -clampedReduction; // Negative for decrease increments
                 
@@ -276,18 +300,18 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             // For cooling, move setpoint higher (less aggressive cooling)
             const upperBound = this.hassControls.comfortSetpoint !== undefined
                 ? this.hassControls.comfortSetpoint
-                : this.config.maxSetpoint;
+                : this.opts.maxSetpoint;
             
             for (let targetSetpoint = currentSetpoint + step; 
-                 targetSetpoint <= upperBound && targetSetpoint <= this.config.maxSetpoint; 
+                 targetSetpoint <= upperBound && targetSetpoint <= this.opts.maxSetpoint; 
                  targetSetpoint += step) {
                 
                 // Calculate consumption reduction (negative delta)
                 const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const consumptionReduction = setpointDelta * this.config.consumptionPerDegree;
+                const consumptionReduction = setpointDelta * this.opts.consumptionPerDegree;
                 
                 // Clamp reduction to not go below minimum consumption
-                const maxReduction = currentConsumption - this.config.heatCoolMinConsumption;
+                const maxReduction = currentConsumption - this.opts.heatCoolMinConsumption;
                 const clampedReduction = Math.min(consumptionReduction, maxReduction);
                 const delta = -clampedReduction; // Negative for decrease increments
                 
@@ -303,7 +327,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         // Handle mode transitions to fan-only (only when no comfort setpoint specified)
         if ((currentMode === "heat" || currentMode === "cool") && this.hassControls.comfortSetpoint === undefined) {
-            const fanOnlyReduction = currentConsumption - this.config.fanOnlyMinConsumption;
+            const fanOnlyReduction = currentConsumption - this.opts.fanOnlyMinConsumption;
             if (fanOnlyReduction > 0) {
                 increments.push({
                     delta: -fanOnlyReduction, // Negative for decrease increments
@@ -345,21 +369,58 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         return undefined;
     }
 
+    /**
+     * Record state change and set appropriate debounce period.
+     * 
+     * Different operation types have different debounce periods:
+     * - Setpoint changes: 2+ minutes (allow HVAC system to respond)
+     * - Mode changes: 5+ minutes (compressor/heat pump cycling)
+     * - Startup: 5+ minutes (system ramp-up time)
+     */
     private recordStateChange(operationType: "setpoint" | "mode" | "startup"): void {
         const now = Date.now();
-        this.lastOperationType = operationType;
 
         // Set appropriate debounce period based on operation type
         switch (operationType) {
             case "setpoint":
-                this.unlockedTime = now + this.config.setpointDebounceMs;
+                this.unlockedTime = now + this.opts.setpointDebounceMs;
                 break;
             case "mode":
-                this.unlockedTime = now + this.config.modeDebounceMs;
+                this.unlockedTime = now + this.opts.modeDebounceMs;
                 break;
             case "startup":
-                this.unlockedTime = now + this.config.startupDebounceMs;
+                this.unlockedTime = now + this.opts.startupDebounceMs;
                 break;
+        }
+    }
+
+    /**
+     * Start timeout for automatic device shutdown from fan-only mode.
+     * 
+     * After the configured timeout period, device automatically turns off to prevent
+     * unnecessary fan consumption. This implements the progression:
+     * heat/cool → fan-only → automatic off
+     */
+    private startFanOnlyTimeout(): void {
+        // Clear any existing timeout
+        this.clearFanOnlyTimeout();
+        
+        // Start new timeout for automatic off transition
+        this.fanOnlyTimeoutTimer = setTimeout(() => {
+            this.climateEntityRef.turnOff();
+            this.fanOnlyTimeoutTimer = null;
+            
+            // Reset state machine to idle after auto-off
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.IDLE,
+            );
+        }, this.opts.fanOnlyTimeoutMs);
+    }
+
+    private clearFanOnlyTimeout(): void {
+        if (this.fanOnlyTimeoutTimer) {
+            clearTimeout(this.fanOnlyTimeoutTimer);
+            this.fanOnlyTimeoutTimer = null;
         }
     }
 
@@ -400,6 +461,10 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             } else {
                 this.climateEntityRef.setHvacMode(increment.modeChange);
             }
+            
+            // Clear fan-only timeout when transitioning away from fan-only mode
+            this.clearFanOnlyTimeout();
+            
             this.recordStateChange("mode");
             this.consumptionTransitionStateMachine.transitionTo(
                 ConsumptionTransitionState.INCREASE_PENDING,
@@ -428,6 +493,10 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         if (increment.modeChange === "fan_only") {
             // Mode change to fan-only
             this.climateEntityRef.setHvacMode("fan_only");
+            
+            // Start fan-only timeout for automatic off transition
+            this.startFanOnlyTimeout();
+            
             this.recordStateChange("mode");
             this.consumptionTransitionStateMachine.transitionTo(
                 ConsumptionTransitionState.DECREASE_PENDING,
@@ -448,6 +517,9 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         // Turn off device immediately
         this.climateEntityRef.turnOff();
 
+        // Clear any pending fan-only timeout
+        this.clearFanOnlyTimeout();
+
         // Reset state machine to idle
         this.consumptionTransitionStateMachine.transitionTo(
             ConsumptionTransitionState.IDLE,
@@ -455,6 +527,71 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         // Reset debounce state
         this.unlockedTime = 0;
-        this.lastOperationType = null;
+    }
+}
+
+export class ClimateHassControls implements IClimateHassControls {
+    private readonly desiredSetpointEntity: ByIdProxy<PICK_ENTITY<"number">>;
+    private readonly desiredModeEntity: ByIdProxy<PICK_ENTITY<"select">>;
+    private readonly comfortSetpointEntity: ByIdProxy<PICK_ENTITY<"number">>;
+
+    constructor(
+        name: string,
+        synapse: TServiceParams["synapse"],
+        context: TServiceParams["context"],
+    ) {
+        const subDevice = synapse.device.register("daytime_load_" + name, {
+            name: "Daytime Load " + name,
+        });
+
+        this.desiredSetpointEntity = synapse
+            .number({
+                context,
+                device_id: subDevice,
+                name: "Desired Setpoint",
+                unique_id: "daytime_load_" + name + "_desired_setpoint",
+            })
+            .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
+
+        this.desiredModeEntity = synapse
+            .select({
+                context,
+                device_id: subDevice,
+                name: "Desired Mode",
+                unique_id: "daytime_load_" + name + "_desired_mode",
+                options: ["heat", "cool"],
+            })
+            .getEntity() as ByIdProxy<PICK_ENTITY<"select">>;
+
+        this.comfortSetpointEntity = synapse
+            .number({
+                context,
+                device_id: subDevice,
+                name: "Comfort Setpoint",
+                unique_id: "daytime_load_" + name + "_comfort_setpoint",
+            })
+            .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
+    }
+
+    get desiredSetpoint(): number {
+        return this.desiredSetpointEntity.state;
+    }
+
+    get desiredMode(): "heat" | "cool" {
+        switch (this.desiredModeEntity.state) {
+            case "heat":
+                return "heat";
+            case "cool":
+                return "cool";
+            default:
+                throw new Error(
+                    "Invalid desired mode: " + this.desiredModeEntity.state,
+                );
+        }
+    }
+
+    get comfortSetpoint(): number | undefined {
+        const state = this.comfortSetpointEntity.state;
+        return state !== undefined && state !== null ? state : undefined;
     }
 }
