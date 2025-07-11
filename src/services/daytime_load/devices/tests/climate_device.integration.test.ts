@@ -61,8 +61,8 @@ describe("ClimateDevice Integration Tests", () => {
       1,
       mockClimateEntity,
       mockSensorEntity,
-      config,
       hassControls,
+      config,
     );
   });
 
@@ -411,8 +411,8 @@ describe("ClimateDevice Integration Tests", () => {
         1,
         mockClimateEntity,
         mockSensorEntity,
-        edgeCaseConfig,
         hassControls,
+        edgeCaseConfig,
       );
 
       // Should still function with different limits

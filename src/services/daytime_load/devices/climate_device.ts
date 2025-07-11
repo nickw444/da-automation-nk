@@ -8,6 +8,7 @@ import { IClimateEntityWrapper } from "../../../entities/climate_entity_wrapper"
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 import { TServiceParams } from "@digital-alchemy/core";
 import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
+import { toSnakeCase } from "../../../base/snake_case";
 
 
 export interface ClimateDeviceOptions {
@@ -68,8 +69,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         readonly priority: number,
         private readonly climateEntityRef: IClimateEntityWrapper,
         private readonly consumptionEntityRef: ISensorEntityWrapper,
-        private readonly opts: ClimateDeviceOptions,
         private readonly hassControls: IClimateHassControls,
+        private readonly opts: ClimateDeviceOptions,
     ) {
     }
 
@@ -233,8 +234,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         return increments;
     }
-
-
 
     /**
      * Calculate available power consumption decreases.
@@ -424,10 +423,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         }
     }
 
-
-
-
-
     increaseConsumptionBy(increment: ClimateIncrement): void {
         // Check for debounce - return silently if in debounce period
         if (this.changeState?.type === "debounce") {
@@ -540,7 +535,7 @@ export class ClimateHassControls implements IClimateHassControls {
         synapse: TServiceParams["synapse"],
         context: TServiceParams["context"],
     ) {
-        const subDevice = synapse.device.register("daytime_load_" + name, {
+        const subDevice = synapse.device.register("daytime_load_" + toSnakeCase(name), {
             name: "Daytime Load " + name,
         });
 
@@ -549,7 +544,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 context,
                 device_id: subDevice,
                 name: "Desired Setpoint",
-                unique_id: "daytime_load_" + name + "_desired_setpoint",
+                unique_id: "daytime_load_" + toSnakeCase(name) + "_desired_setpoint",
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
 
@@ -558,7 +553,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 context,
                 device_id: subDevice,
                 name: "Desired Mode",
-                unique_id: "daytime_load_" + name + "_desired_mode",
+                unique_id: "daytime_load_" + toSnakeCase(name) + "_desired_mode",
                 options: ["heat", "cool"],
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"select">>;
@@ -568,7 +563,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 context,
                 device_id: subDevice,
                 name: "Comfort Setpoint",
-                unique_id: "daytime_load_" + name + "_comfort_setpoint",
+                unique_id: "daytime_load_" + toSnakeCase(name) + "_comfort_setpoint",
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
     }

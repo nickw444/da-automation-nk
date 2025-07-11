@@ -58,8 +58,8 @@ describe("ClimateDevice", () => {
       1,
       mockClimateEntity,
       mockSensorEntity,
-      config,
       hassControls,
+      config,
     );
   });
 
@@ -734,8 +734,8 @@ describe("ClimateDevice", () => {
         1,
         mockClimateEntity,
         mockSensorEntity,
-        config,
         hassControls,
+        config,
       );
       
       // Access private method through any casting to start timeout
@@ -804,8 +804,8 @@ describe("ClimateDevice", () => {
         1,
         mockClimateEntity,
         mockSensorEntity,
-        config,
         hassControls,
+        config,
       );
       
       // Start first timeout
@@ -838,8 +838,8 @@ describe("ClimateDevice", () => {
         1,
         mockClimateEntity,
         mockSensorEntity,
-        config,
         hassControls,
+        config,
       )).not.toThrow();
     });
 
@@ -854,8 +854,8 @@ describe("ClimateDevice", () => {
         1,
         mockClimateEntity,
         mockSensorEntity,
-        config,
         controlsWithoutComfort,
+        config,
       )).not.toThrow();
     });
   });

@@ -3,6 +3,7 @@ import { BooleanDevice } from "./devices/boolean_device";
 import { Device } from "./devices/device";
 import { PICK_ENTITY } from "@digital-alchemy/hass";
 import { ClimateDeviceOptions } from "./devices/climate_device";
+import { BooleanDeviceOptions } from "./devices/boolean_device";
 
 type BaseDeviceConfig = {
   priority: number; // Priority for load management (lower number = higher priority)
@@ -15,16 +16,14 @@ type BooleanDeviceConfig = {
   kind: "boolean";
   entityId: PICK_ENTITY<"switch">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
-  expectedConsumption: number; // Expected power consumption in watts
-  offToOnDebounceMs: number; // Debounce time from OFF to ON in milliseconds
-  onToOffDebounceMs: number; // Debounce time from ON to OFF in milliseconds
+  opts: BooleanDeviceOptions;
 };
 
 type ClimateDeviceConfig = {
   kind: "climate";
   entityId: PICK_ENTITY<"climate">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
-  opts: Omit<ClimateDeviceOptions, keyof BaseDeviceConfig>;
+  opts: ClimateDeviceOptions;
 };
 
 type HumidifierDeviceConfig = {
@@ -78,21 +77,25 @@ const devices: DeviceConfig[] = [
     kind: "boolean",
     entityId: "switch.subfloor_fan",
     consumptionEntityId: "sensor.subfloor_fan_current_consumption",
-    expectedConsumption: 50,
     priority: 2,
     name: "Subfloor Fan",
-    offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-    onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+    opts: {
+      expectedConsumption: 50,
+      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+    },
   },
   {
     kind: "boolean",
     entityId: "switch.towel_rail",
     consumptionEntityId: "sensor.towel_rail_current_consumption",
-    expectedConsumption: 80,
     priority: 3,
     name: "Towel Rail",
-    offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-    onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+    opts: {
+      expectedConsumption: 80,
+      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+    },
   },
   {
     kind: "climate",
@@ -107,18 +110,18 @@ const devices: DeviceConfig[] = [
       setpointStep: 1.0,
 
       // Power Configuration
-      compressorStartupMinConsumption: 300,
+      compressorStartupMinConsumption: 500,
       powerOnSetpointOffset: 2.0,
-      consumptionPerDegree: 150,
-      maxCompressorConsumption: 2200,
-      fanOnlyMinConsumption: 50,
+      consumptionPerDegree: 300,
+      maxCompressorConsumption: 2400,
+      fanOnlyMinConsumption: 200,
       heatCoolMinConsumption: 300,
 
       // Timing Configuration
       setpointDebounceMs: 5 * 60_000,     // 5 minutes
       modeDebounceMs: 10 * 60_000,        // 10 minutes
       startupDebounceMs: 10 * 60_000,     // 10 minutes
-      fanOnlyTimeoutMs: 60 * 60_000,      // 60 minutes
+      fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
     }
   },
 ];

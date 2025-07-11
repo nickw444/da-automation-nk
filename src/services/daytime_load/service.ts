@@ -1,6 +1,7 @@
 import type { TServiceParams } from "@digital-alchemy/core";
 import { config as appConfig } from "./config";
 import { BooleanDevice } from "./devices/boolean_device";
+import { BooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
 import { ClimateDevice, ClimateHassControls } from "./devices/climate_device";
 import { ClimateEntityWrapper } from "../../entities/climate_entity_wrapper";
 import { SensorEntityWrapper } from "../../entities/sensor_entity_wrapper";
@@ -34,14 +35,15 @@ export function DaytimeLoadService({
       .map((deviceConfig) => {
         switch (deviceConfig.kind) {
           case "boolean":
+            // Create Boolean Entity and Sensor Entity wrappers
+            const booleanEntityWrapper = new BooleanEntityWrapper(hass.refBy.id(deviceConfig.entityId));
+            const booleanConsumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
             return new BooleanDevice(
-              hass.refBy.id(deviceConfig.entityId),
-              hass.refBy.id(deviceConfig.consumptionEntityId),
-              deviceConfig.expectedConsumption,
               deviceConfig.name,
               deviceConfig.priority,
-              deviceConfig.offToOnDebounceMs,
-              deviceConfig.onToOffDebounceMs,
+              booleanEntityWrapper,
+              booleanConsumptionSensorWrapper,
+              deviceConfig.opts,
             );
           case "climate":
             // Create Climate Entity and Sensor Entity wrappers
@@ -52,8 +54,8 @@ export function DaytimeLoadService({
               deviceConfig.priority,
               climateEntityWrapper,
               consumptionSensorWrapper,
-              deviceConfig.opts,
               new ClimateHassControls(deviceConfig.name, synapse, context),
+              deviceConfig.opts,
             );
           default:
             logger.error(`Unsupported device kind: ${deviceConfig.kind}`);

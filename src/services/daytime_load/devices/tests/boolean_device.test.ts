@@ -20,13 +20,15 @@ describe("BooleanDevice", () => {
     };
 
     device = new BooleanDevice(
-      mockBooleanEntity,
-      mockSensorEntity,
-      50,
       "Test Device",
       1,
-      30000, // offToOnDebounceMs
-      10000, // onToOffDebounceMs
+      mockBooleanEntity,
+      mockSensorEntity,
+      {
+        expectedConsumption: 50,
+        offToOnDebounceMs: 30000,
+        onToOffDebounceMs: 10000,
+      },
     );
   });
 

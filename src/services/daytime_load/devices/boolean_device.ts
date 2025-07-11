@@ -7,6 +7,12 @@ import { DeviceHelper, IBaseDevice } from "./base_device";
 import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 
+export interface BooleanDeviceOptions {
+  expectedConsumption: number;  // Expected power consumption in watts
+  offToOnDebounceMs: number;    // Debounce time after turning off before allowing turn on
+  onToOffDebounceMs: number;    // Debounce time after turning on before allowing turn off
+}
+
 interface BooleanIncreaseIncrement {
   delta: number;     // Power consumption change in watts
   action: "turn_on"; // Encapsulated desired action
@@ -23,13 +29,11 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
   private unlockedTime: number = 0;
 
   constructor(
-    private readonly entityRef: IBooleanEntityWrapper,
-    private readonly consumptionEntityRef: ISensorEntityWrapper,
-    private readonly expectedConsumption: number, // Expected power consumption in watts
     public readonly name: string,
     public readonly priority: number,
-    private readonly offToOnDebounceMs: number,
-    private readonly onToOffDebounceMs: number,
+    private readonly entityRef: IBooleanEntityWrapper,
+    private readonly consumptionEntityRef: ISensorEntityWrapper,
+    private readonly opts: BooleanDeviceOptions,
   ) {
   }
 
@@ -40,7 +44,7 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
     }
     // For off device, use expectedConsumption (don't rely on sensor when off)
     return [{ 
-      delta: this.expectedConsumption, 
+      delta: this.opts.expectedConsumption, 
       action: "turn_on" 
     }];
   }
@@ -51,7 +55,7 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
       return [];
     }
     // For on device, use actual consumption from sensor, fallback to expected
-    const consumption = unwrapNumericState(this.consumptionEntityRef.state) || this.expectedConsumption;
+    const consumption = unwrapNumericState(this.consumptionEntityRef.state) || this.opts.expectedConsumption;
     return [{ 
       delta: -consumption, 
       action: "turn_off" 
@@ -71,7 +75,7 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
       this.consumptionTransitionStateMachine.state ===
       ConsumptionTransitionState.INCREASE_PENDING
     ) {
-      return { type: "increase", expectedFutureConsumption: this.expectedConsumption };
+      return { type: "increase", expectedFutureConsumption: this.opts.expectedConsumption };
     } else if (
       this.consumptionTransitionStateMachine.state ===
       ConsumptionTransitionState.DECREASE_PENDING
@@ -91,10 +95,10 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
     const now = Date.now();
     if (newState === "on") {
       // After turning on, unlock after onToOffDebounceMs
-      this.unlockedTime = now + this.onToOffDebounceMs;
+      this.unlockedTime = now + this.opts.onToOffDebounceMs;
     } else {
       // After turning off, unlock after offToOnDebounceMs
-      this.unlockedTime = now + this.offToOnDebounceMs;
+      this.unlockedTime = now + this.opts.offToOnDebounceMs;
     }
   }
 
