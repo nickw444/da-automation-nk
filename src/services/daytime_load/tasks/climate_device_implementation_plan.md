@@ -96,28 +96,28 @@ This plan outlines the step-by-step implementation of the `ClimateDevice` class 
 ## Phase 5: Action Execution
 
 ### 9. Implement increaseConsumptionBy method
-- [ ] Execute encoded actions based on increment properties:
-  - [ ] `modeChange` from off: Set initial device setpoint
-  - [ ] `modeChange` specified: Switch mode
-  - [ ] `targetSetpoint` specified: Set absolute setpoint
-  - [ ] `setpointChange` specified: Adjust relatively
-- [ ] Handle startup from off state with proper setpoint calculation
-- [ ] Integrate with state machine for pending changes
-- [ ] Add debounce period management using `recordStateChange`
-- [ ] Test action execution and state updates:
-  - [ ] Startup actions
-  - [ ] Setpoint adjustments
-  - [ ] Mode changes
-  - [ ] State machine transitions
+- [x] Execute encoded actions based on increment properties:
+  - [x] `modeChange` from off: Set initial device setpoint
+  - [x] `modeChange` specified: Switch mode
+  - [x] `targetSetpoint` specified: Set absolute setpoint
+  - [x] `setpointChange` specified: Adjust relatively
+- [x] Handle startup from off state with proper setpoint calculation
+- [x] Integrate with state machine for pending changes
+- [x] Add debounce period management using `recordStateChange`
+- [x] Test action execution and state updates:
+  - [x] Startup actions
+  - [x] Setpoint adjustments
+  - [x] Mode changes
+  - [x] State machine transitions
 
 ### 10. Implement decreaseConsumptionBy method
-- [ ] Execute decrease actions (setpoint adjustments, fan-only mode)
-- [ ] Handle comfort setpoint constraints
-- [ ] Apply same action execution pattern as increase
-- [ ] Test decrease action execution:
-  - [ ] Setpoint adjustments
-  - [ ] Fan-only mode transitions
-  - [ ] Comfort boundary enforcement
+- [x] Execute decrease actions (setpoint adjustments, fan-only mode)
+- [x] Handle comfort setpoint constraints
+- [x] Apply same action execution pattern as increase
+- [x] Test decrease action execution:
+  - [x] Setpoint adjustments
+  - [x] Fan-only mode transitions
+  - [x] Comfort boundary enforcement
 
 ## Phase 6: Advanced Features
 

@@ -183,22 +183,18 @@ describe("ClimateDevice", () => {
         expect(increments).toEqual([
           expect.objectContaining({
             targetSetpoint: 25,
-            setpointChange: -1,
             delta: 350, // 1°C more aggressive = 1*350W = 350W
           }),
           expect.objectContaining({
             targetSetpoint: 24,
-            setpointChange: -2,
             delta: 700, // 2°C more aggressive = 2*350W = 700W
           }),
           expect.objectContaining({
             targetSetpoint: 23,
-            setpointChange: -3,
             delta: 1050, // 3°C more aggressive = 3*350W = 1050W
           }),
           expect.objectContaining({
             targetSetpoint: 22,
-            setpointChange: -4,
             delta: 1300, // 4°C would be 1400W, but 1200W + 1400W = 2600W clamped to 2500W → delta = 1300W
           }),
           // Note: Further increments would all produce delta=1300W due to maxCompressorConsumption clamping,
@@ -221,22 +217,18 @@ describe("ClimateDevice", () => {
         expect(increments).toEqual([
           expect.objectContaining({
             targetSetpoint: 23, // First increment (24 -> 23)
-            setpointChange: -1,
             delta: 350, // 1°C more aggressive = 1*350W = 350W
           }),
           expect.objectContaining({
             targetSetpoint: 22, // Second increment (24 -> 22)
-            setpointChange: -2,
             delta: 700, // 2°C more aggressive = 2*350W = 700W
           }),
           expect.objectContaining({
             targetSetpoint: 21,
-            setpointChange: -3,
             delta: 1050, // 3°C more aggressive = 3*350W = 1050W
           }),
           expect.objectContaining({
             targetSetpoint: 20,
-            setpointChange: -4,
             delta: 1300, // 4°C would be 1400W, but 1200W + 1400W = 2600W clamped to 2500W → delta = 1300W
           }),
         ]);
@@ -257,13 +249,11 @@ describe("ClimateDevice", () => {
         expect(increments).toEqual([
           expect.objectContaining({
             targetSetpoint: 23,
-            setpointChange: -1, // 23 - 24
             modeChange: "cool",
             delta: 800, // 600W (startup) + |24-23|*350W = 600W + 350W = 950W total, 950W - 150W = 800W delta
           }),
           expect.objectContaining({
             targetSetpoint: 22,
-            setpointChange: -2, // 22 - 24
             modeChange: "cool",
             delta: 1150, // 600W (startup) + |24-22|*350W = 600W + 700W = 1300W total, 1300W - 150W = 1150W delta
           }),
@@ -320,7 +310,6 @@ describe("ClimateDevice", () => {
         expect(increments).toEqual([
           expect.objectContaining({
             targetSetpoint: 30, // Should be clamped to maxSetpoint
-            setpointChange: 1, // 30 - 29
             delta: expect.any(Number),
           }),
         ]);
@@ -361,13 +350,11 @@ describe("ClimateDevice", () => {
         expect(increments).toEqual([
           expect.objectContaining({ 
             targetSetpoint: 23, 
-            setpointChange: 1, 
             delta: -350  // 350W reduction
             // No modeChange property for setpoint adjustments
           }),
           expect.objectContaining({ 
             targetSetpoint: 24, 
-            setpointChange: 2, 
             delta: -700  // 700W reduction (max possible)
           }),
           // 25°C and 26°C setpoints filtered out due to duplicate -700W delta
@@ -393,8 +380,8 @@ describe("ClimateDevice", () => {
         // Current consumption: 1400W, heatCoolMinConsumption: 700W, max reduction: 700W
         // Duplicate deltas are filtered out (25°C-30°C would all be -700W, so only first occurrence is kept)
         expect(increments).toEqual([
-          expect.objectContaining({ targetSetpoint: 23, setpointChange: 1, delta: -350 }),  // 350W reduction
-          expect.objectContaining({ targetSetpoint: 24, setpointChange: 2, delta: -700 }),  // 700W reduction (max)
+          expect.objectContaining({ targetSetpoint: 23, delta: -350 }),  // 350W reduction
+          expect.objectContaining({ targetSetpoint: 24, delta: -700 }),  // 700W reduction (max)
           // 25°C-30°C setpoints filtered out due to duplicate -700W delta
           expect.objectContaining({ 
             modeChange: "fan_only", 
@@ -511,8 +498,162 @@ describe("ClimateDevice", () => {
   });
 
   describe("Action Methods", () => {
-    // Note: Debounce behavior during increaseConsumptionBy/decreaseConsumptionBy 
-    // will be tested functionally when these methods are implemented in Phase 5
+    describe("increaseConsumptionBy", () => {
+      it("should handle startup from off state with mode and setpoint", () => {
+        mockClimateEntity.state = "off";
+        const increment = {
+          delta: 1300,
+          modeChange: "cool" as const,
+          targetSetpoint: 24,
+        };
+
+        device.increaseConsumptionBy(increment);
+
+        expect(mockClimateEntity.setTemperature).toHaveBeenCalledWith({
+          temperature: 24,
+          hvac_mode: "cool",
+        });
+      });
+
+      it("should handle mode change from fan_only to heat/cool", () => {
+        mockClimateEntity.state = "fan_only";
+        mockClimateEntity.attributes.temperature = 24;
+        const increment = {
+          delta: 800,
+          modeChange: "cool" as const,
+          targetSetpoint: 23,
+        };
+
+        device.increaseConsumptionBy(increment);
+
+        expect(mockClimateEntity.setTemperature).toHaveBeenCalledWith({
+          temperature: 23,
+          hvac_mode: "cool",
+        });
+      });
+
+      it("should handle absolute setpoint change", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 24;
+        const increment = {
+          delta: 350,
+          targetSetpoint: 23,
+        };
+
+        device.increaseConsumptionBy(increment);
+
+        expect(mockClimateEntity.setTemperature).toHaveBeenCalledWith({
+          temperature: 23,
+        });
+      });
+
+
+
+      it("should record appropriate state change and set pending state", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 24;
+        const increment = {
+          delta: 350,
+          targetSetpoint: 23,
+        };
+
+        device.increaseConsumptionBy(increment);
+
+        // Check that changeState indicates increase pending
+        expect(device.changeState).toEqual({
+          type: "increase",
+          expectedFutureConsumption: 0
+        });
+      });
+
+      it("should throw error when change already pending", () => {
+        // First action to trigger pending state
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 24;
+        const firstIncrement = {
+          delta: 350,
+          targetSetpoint: 23,
+        };
+        device.increaseConsumptionBy(firstIncrement);
+        
+        // Second action should throw error due to pending change
+        const secondIncrement = {
+          delta: 700,
+          targetSetpoint: 22,
+        };
+        expect(() => device.increaseConsumptionBy(secondIncrement)).toThrow(
+          "Cannot increase consumption for Test Climate Device: change already pending"
+        );
+      });
+    });
+
+    describe("decreaseConsumptionBy", () => {
+      it("should handle mode change to fan_only", () => {
+        mockClimateEntity.state = "cool";
+        const increment = {
+          delta: -1250,
+          modeChange: "fan_only" as const,
+        };
+
+        device.decreaseConsumptionBy(increment);
+
+        expect(mockClimateEntity.setHvacMode).toHaveBeenCalledWith("fan_only");
+      });
+
+      it("should handle absolute setpoint change", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 22;
+        const increment = {
+          delta: -350,
+          targetSetpoint: 23,
+        };
+
+        device.decreaseConsumptionBy(increment);
+
+        expect(mockClimateEntity.setTemperature).toHaveBeenCalledWith({
+          temperature: 23,
+        });
+      });
+
+
+
+      it("should record appropriate state change and set pending state", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 22;
+        const increment = {
+          delta: -350,
+          targetSetpoint: 23,
+        };
+
+        device.decreaseConsumptionBy(increment);
+
+        // Check that changeState indicates decrease pending
+        expect(device.changeState).toEqual({
+          type: "decrease",
+          expectedFutureConsumption: 0
+        });
+      });
+
+      it("should throw error when change already pending", () => {
+        // First action to trigger pending state
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.temperature = 22;
+        const firstIncrement = {
+          delta: -350,
+          targetSetpoint: 23,
+        };
+        device.decreaseConsumptionBy(firstIncrement);
+        
+        // Second action should throw error due to pending change
+        const secondIncrement = {
+          delta: -700,
+          targetSetpoint: 24,
+        };
+        expect(() => device.decreaseConsumptionBy(secondIncrement)).toThrow(
+          "Cannot decrease consumption for Test Climate Device: change already pending"
+        );
+      });
+    });
 
     it("should call turnOff when stop is called", () => {
       device.stop();
@@ -520,8 +661,24 @@ describe("ClimateDevice", () => {
       expect(mockClimateEntity.turnOff).toHaveBeenCalledTimes(1);
     });
 
-    // Note: Debounce state reset behavior will be tested functionally 
-    // when debounce behavior is triggered through public API actions in Phase 5
+    it("should reset state and debounce when stop is called", () => {
+      // First trigger a state change
+      mockClimateEntity.state = "cool";
+      const increment = {
+        delta: 350,
+        targetSetpoint: 23,
+      };
+      device.increaseConsumptionBy(increment);
+
+      // Verify we're in pending state
+      expect(device.changeState?.type).toBe("increase");
+
+      // Call stop
+      device.stop();
+
+      // State should be reset
+      expect(device.changeState).toBeUndefined();
+    });
   });
 
   // Note: Debounce logic will be tested functionally in Phase 5 when

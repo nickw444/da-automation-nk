@@ -50,7 +50,6 @@ export interface IClimateHassControls {
 export interface ClimateIncrement {
     delta: number;                  // Power consumption change (in Watts)
     targetSetpoint?: number;        // Absolute target setpoint
-    setpointChange?: number;        // Relative change from current setpoint
     modeChange?: "heat" | "cool" | "fan_only";  // Mode switch operation
 }
 
@@ -138,7 +137,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                             delta,
                             modeChange: desiredMode,
                             targetSetpoint,
-                            setpointChange: targetSetpoint - currentSetpoint,
                         });
                         lastDelta = delta;
                     }
@@ -161,7 +159,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                             delta,
                             modeChange: desiredMode,
                             targetSetpoint,
-                            setpointChange: targetSetpoint - currentSetpoint,
                         });
                         lastDelta = delta;
                     }
@@ -192,7 +189,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                         increments.push({
                             delta,
                             targetSetpoint,
-                            setpointChange: targetSetpoint - currentSetpoint,
                         });
                         lastDelta = delta;
                     }
@@ -217,7 +213,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                         increments.push({
                             delta,
                             targetSetpoint,
-                            setpointChange: targetSetpoint - currentSetpoint,
                         });
                         lastDelta = delta;
                     }
@@ -273,7 +268,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                     increments.push({
                         delta,
                         targetSetpoint,
-                        setpointChange: targetSetpoint - currentSetpoint,
                     });
                     lastDelta = delta;
                 }
@@ -301,7 +295,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                     increments.push({
                         delta,
                         targetSetpoint,
-                        setpointChange: targetSetpoint - currentSetpoint,
                     });
                     lastDelta = delta;
                 }
@@ -382,7 +375,45 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
-        // Placeholder implementation - will be implemented in Phase 5
+        // Execute encoded actions based on increment properties
+        if (increment.modeChange && this.climateEntityRef.state === "off") {
+            // Startup from off state: Set initial mode and setpoint
+            if (increment.targetSetpoint !== undefined) {
+                this.climateEntityRef.setTemperature({
+                    temperature: increment.targetSetpoint,
+                    hvac_mode: increment.modeChange,
+                });
+            } else {
+                this.climateEntityRef.setHvacMode(increment.modeChange);
+            }
+            this.recordStateChange("startup");
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.INCREASE_PENDING,
+            );
+        } else if (increment.modeChange) {
+            // Mode change (e.g., fan_only to heat/cool)
+            if (increment.targetSetpoint !== undefined) {
+                this.climateEntityRef.setTemperature({
+                    temperature: increment.targetSetpoint,
+                    hvac_mode: increment.modeChange,
+                });
+            } else {
+                this.climateEntityRef.setHvacMode(increment.modeChange);
+            }
+            this.recordStateChange("mode");
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.INCREASE_PENDING,
+            );
+        } else if (increment.targetSetpoint !== undefined) {
+            // Absolute setpoint change
+            this.climateEntityRef.setTemperature({
+                temperature: increment.targetSetpoint,
+            });
+            this.recordStateChange("setpoint");
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.INCREASE_PENDING,
+            );
+        }
     }
 
     decreaseConsumptionBy(increment: ClimateIncrement): void {
@@ -393,7 +424,24 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
-        // Placeholder implementation - will be implemented in Phase 5
+        // Execute decrease actions (setpoint adjustments, fan-only mode)
+        if (increment.modeChange === "fan_only") {
+            // Mode change to fan-only
+            this.climateEntityRef.setHvacMode("fan_only");
+            this.recordStateChange("mode");
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.DECREASE_PENDING,
+            );
+        } else if (increment.targetSetpoint !== undefined) {
+            // Absolute setpoint change
+            this.climateEntityRef.setTemperature({
+                temperature: increment.targetSetpoint,
+            });
+            this.recordStateChange("setpoint");
+            this.consumptionTransitionStateMachine.transitionTo(
+                ConsumptionTransitionState.DECREASE_PENDING,
+            );
+        }
     }
 
     stop(): void {
