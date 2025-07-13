@@ -1,9 +1,10 @@
-import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
+import { ByIdProxy, PICK_ENTITY, RemovableCallback } from "@digital-alchemy/hass";
 
 export interface IBooleanEntityWrapper {
   get state(): string;
   turn_on(): void;
   turn_off(): void;
+  onUpdate: RemovableCallback<PICK_ENTITY<"switch" | "light" | "fan" | "input_boolean">>;
 }
 
 export interface MockBooleanEntityWrapper extends IBooleanEntityWrapper {
@@ -27,5 +28,9 @@ export class BooleanEntityWrapper implements IBooleanEntityWrapper {
 
   turn_off(): void {
     this.entityRef.turn_off();
+  }
+
+  get onUpdate(): RemovableCallback<PICK_ENTITY<"switch" | "light" | "fan" | "input_boolean">> {
+    return this.entityRef.onUpdate;
   }
 }
