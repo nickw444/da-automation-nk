@@ -114,6 +114,7 @@ This project uses a **dual testing strategy**:
 - Use business logic tests for device behavior, algorithms, debounce logic
 - Use integration tests for entity wrapper functionality and service calls
 - Import mock interfaces from entity wrapper files for consistency
+- **Use object/array matchers in assertions**: Prefer `expect(array).toEqual([...])` over accessing array indices like `expect(array[0]).toEqual(...)`
 - See `docs/digital-alchemy/docs/testing/` for framework-specific patterns
 
 ## ⚠️ Important Guidelines

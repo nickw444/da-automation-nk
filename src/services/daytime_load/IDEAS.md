@@ -74,3 +74,9 @@ export interface IBaseDevice2 {
 }
 
 ```
+
+
+
+## TODO
+
+Need to handle future consumption
