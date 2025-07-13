@@ -148,6 +148,17 @@ This project uses a **dual testing strategy**:
 3. **Run type-check** to ensure TypeScript compliance
 4. **Ask for clarification** if framework usage is unclear
 
+## 🤖 Creating New Automation Services
+
+For detailed step-by-step guidance on creating automation services, see `src/services/AGENT.md` which covers:
+
+- Service file structure with entity wrapper dependencies
+- Installation in main.ts
+- Unit testing patterns with mocks and callback capture
+- Complete working examples with reference implementations
+
+Key pattern: Use class-based services with entity wrapper dependencies for testability and abstraction.
+
 ## 🚀 Getting Started
 
 For new features:
