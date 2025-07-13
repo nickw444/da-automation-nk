@@ -4,6 +4,7 @@ import { Device } from "./devices/device";
 import { PICK_ENTITY } from "@digital-alchemy/hass";
 import { ClimateDeviceOptions } from "./devices/climate_device";
 import { BooleanDeviceOptions } from "./devices/boolean_device";
+import { DirectConsumptionDeviceOptions } from "./devices/direct_consumption_device";
 
 type BaseDeviceConfig = {
   priority: number; // Priority for load management (lower number = higher priority)
@@ -36,6 +37,10 @@ type DirectConsumptionDeviceConfig = {
   kind: "direct_consumption";
   entityId: PICK_ENTITY<"input_number" | "number">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
+  voltageEntityId: PICK_ENTITY<"sensor">;
+  enableEntityId: PICK_ENTITY<"switch" | "input_boolean">;
+  canEnableEntityId: PICK_ENTITY<"binary_sensor">;
+  opts: DirectConsumptionDeviceOptions;
 };
 
 type DeviceConfig = BaseDeviceConfig &
@@ -123,7 +128,7 @@ const devices: DeviceConfig[] = [
       startupDebounceMs: 10 * 60_000,     // 10 minutes
       fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
     }
-  },
+  }
 ];
 
 export const config: Config = {

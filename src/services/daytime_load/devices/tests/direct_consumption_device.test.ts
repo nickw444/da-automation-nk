@@ -3,12 +3,14 @@ import { DirectConsumptionDevice, DirectConsumptionDeviceOptions } from "../dire
 import { MockNumberEntityWrapper } from "../../../../entities/number_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
 import { MockBooleanEntityWrapper } from "../../../../entities/boolean_entity_wrapper";
+import { MockBinarySensorEntityWrapper } from "../../../../entities/binary_sensor_entity_wrapper";
 
 describe("DirectConsumptionDevice", () => {
     let mockCurrentEntity: MockNumberEntityWrapper;
     let mockConsumptionEntity: MockSensorEntityWrapper;
     let mockVoltageEntity: MockSensorEntityWrapper;
     let mockEnableEntity: MockBooleanEntityWrapper;
+    let mockCanEnableEntity: MockBinarySensorEntityWrapper;
     let config: DirectConsumptionDeviceOptions;
     let device: DirectConsumptionDevice;
 
@@ -18,19 +20,23 @@ describe("DirectConsumptionDevice", () => {
             attributes: { min: 0, max: 20, step: 0.5 },
             setValue: vi.fn(),
         };
-        
+
         mockConsumptionEntity = {
             state: 0,
         };
-        
+
         mockVoltageEntity = {
             state: 240, // Standard voltage
         };
-        
+
         mockEnableEntity = {
             state: "off",
             turn_on: vi.fn(),
             turn_off: vi.fn(),
+        };
+
+        mockCanEnableEntity = {
+            state: "on", // Default to allowing enable
         };
 
         config = {
@@ -49,6 +55,7 @@ describe("DirectConsumptionDevice", () => {
             mockConsumptionEntity,
             mockVoltageEntity,
             mockEnableEntity,
+            mockCanEnableEntity,
             config,
         );
     });
@@ -617,6 +624,7 @@ describe("DirectConsumptionDevice", () => {
                         mockConsumptionEntity,
                         mockVoltageEntity,
                         mockEnableEntity,
+                        mockCanEnableEntity,
                         config,
                     );
 
@@ -632,7 +640,7 @@ describe("DirectConsumptionDevice", () => {
                     // Since the auto-stop mechanism is complex to trigger reliably, and the user
                     // correctly pointed out that direct state manipulation shouldn't be "complex",
                     // we'll use minimal internal access with clear documentation.
-                    
+
                     // Manually transition state machine to simulate completion
                     // This simulates what would happen when entity reaches target state
                     const stateMachine = (testDevice as any).consumptionTransitionStateMachine;
@@ -655,7 +663,7 @@ describe("DirectConsumptionDevice", () => {
 
                     // No entity methods should have been called during debounce
                     expect(mockCurrentEntity.setValue).not.toHaveBeenCalled();
-                    
+
                     // Should still be in debounce state
                     expect(testDevice.changeState?.type).toBe("debounce");
 
@@ -773,6 +781,7 @@ describe("DirectConsumptionDevice", () => {
                 mockConsumptionEntity,
                 mockVoltageEntity,
                 mockEnableEntity,
+                mockCanEnableEntity,
                 config,
             );
 
@@ -794,6 +803,7 @@ describe("DirectConsumptionDevice", () => {
                 mockConsumptionEntity,
                 mockVoltageEntity,
                 mockEnableEntity,
+                mockCanEnableEntity,
                 config,
             );
 
@@ -821,6 +831,7 @@ describe("DirectConsumptionDevice", () => {
                 mockConsumptionEntity,
                 mockVoltageEntity,
                 mockEnableEntity,
+                mockCanEnableEntity,
                 config,
             );
 
@@ -867,6 +878,49 @@ describe("DirectConsumptionDevice", () => {
         });
     });
 
+    describe("Can Enable Entity", () => {
+        it("should not offer increments when device is disabled and cannot be enabled", () => {
+            mockEnableEntity.state = "off";
+            mockCanEnableEntity.state = "off"; // Cannot enable
+
+            const increments = device.increaseIncrements;
+            expect(increments).toEqual([]);
+        });
+
+        it("should offer increments when device is disabled and can be enabled", () => {
+            mockEnableEntity.state = "off";
+            mockCanEnableEntity.state = "on"; // Can enable
+
+            const increments = device.increaseIncrements;
+            expect(increments.length).toBeGreaterThan(0);
+            expect(increments[0].action).toBe("enable");
+        });
+
+        it("should not enable device when canEnableEntityRef is off", () => {
+            mockEnableEntity.state = "off";
+            mockCanEnableEntity.state = "off"; // Cannot enable
+
+            const increments = device.increaseIncrements;
+            if (increments.length > 0) {
+                device.increaseConsumptionBy(increments[0]);
+            }
+
+            expect(mockEnableEntity.turn_on).not.toHaveBeenCalled();
+        });
+
+        it("should enable device when canEnableEntityRef is on", () => {
+            mockEnableEntity.state = "off";
+            mockCanEnableEntity.state = "on"; // Can enable
+
+            const increments = device.increaseIncrements;
+            expect(increments.length).toBeGreaterThan(0);
+
+            device.increaseConsumptionBy(increments[0]);
+
+            expect(mockEnableEntity.turn_on).toHaveBeenCalled();
+        });
+    });
+
     describe("Configuration", () => {
         it("should accept valid configuration", () => {
             expect(() => new DirectConsumptionDevice(
@@ -876,6 +930,7 @@ describe("DirectConsumptionDevice", () => {
                 mockConsumptionEntity,
                 mockVoltageEntity,
                 mockEnableEntity,
+                mockCanEnableEntity,
                 config,
             )).not.toThrow();
         });
@@ -890,6 +945,7 @@ describe("DirectConsumptionDevice", () => {
                 mockConsumptionEntity,
                 mockVoltageEntity,
                 mockEnableEntity,
+                mockCanEnableEntity,
                 customConfig,
             );
 

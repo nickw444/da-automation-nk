@@ -7,6 +7,7 @@ import { DeviceHelper, IBaseDevice } from "./base_device";
 import { INumberEntityWrapper } from "../../../entities/number_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
+import { IBinarySensorEntityWrapper } from "../../../entities/binary_sensor_entity_wrapper";
 
 export interface DirectConsumptionDeviceOptions {
     // Current Configuration
@@ -42,6 +43,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         private readonly consumptionEntityRef: ISensorEntityWrapper,
         private readonly voltageEntityRef: ISensorEntityWrapper,
         private readonly enableEntityRef: IBooleanEntityWrapper,
+        private readonly canEnableEntityRef: IBinarySensorEntityWrapper,
         private readonly opts: DirectConsumptionDeviceOptions,
     ) {
         // Start monitoring for auto-stop condition
@@ -64,6 +66,10 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
 
         // Handle device-disabled case (startup)
         if (this.enableEntityRef.state === "off") {
+            // Check if device is allowed to be enabled
+            if (this.canEnableEntityRef.state === "off") {
+                return []; // Device cannot be enabled, return no increments
+            }
             // Generate increments for all possible current levels from startingMinCurrent to maxCurrent
             const step = this.opts.currentStep;
             const currentTheoreticalPower = 0; // Device is off, so baseline is 0
@@ -88,13 +94,13 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
 
         // Device is enabled - calculate current increases
         const step = this.opts.currentStep;
-        
+
         // Check if device consumption is significantly below current setting
         // This prevents offering more increments when the device clearly has unused capacity
         const actualConsumption = this.currentConsumption;
         const theoreticalCurrentFromConsumption = actualConsumption / currentVoltage;
         const consumptionGap = currentCurrent - theoreticalCurrentFromConsumption;
-        
+
         // If consumption is 2 or more increments below current setting, don't offer more increments
         // Example: Current=4A, Consumption=240W(1A) → Gap=3A >= 2 increments → No more increments
         // This indicates the device has unused capacity and should utilize current setting first
@@ -142,13 +148,13 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
 
         // Device is enabled - calculate current decreases based on actual consumption
         const step = this.opts.currentStep;
-        
+
         // Map current consumption to equivalent current value
         const consumptionEquivalentCurrent = actualConsumption / currentVoltage;
-        
+
         // Round down to nearest step to get the highest target current we can decrease from
         const startingCurrent = Math.floor(consumptionEquivalentCurrent / step) * step;
-        
+
         // Generate decrements down to minimum allowed by number entity
         const minCurrent = this.currentEntityRef.attributes.min ?? 0;
         for (let targetCurrent = startingCurrent - step;
@@ -267,6 +273,11 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
 
         // Execute encoded actions based on increment properties
         if (increment.action === "enable") {
+            // Check if device is allowed to be enabled
+            if (this.canEnableEntityRef.state === "off") {
+                return; // Device cannot be enabled, exit silently
+            }
+
             // Enable device and set starting current
             this.enableEntityRef.turn_on();
             if (increment.targetCurrent !== undefined) {

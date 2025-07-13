@@ -5,6 +5,10 @@ import { BooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
 import { ClimateDevice, ClimateHassControls } from "./devices/climate_device";
 import { ClimateEntityWrapper } from "../../entities/climate_entity_wrapper";
 import { SensorEntityWrapper } from "../../entities/sensor_entity_wrapper";
+import { DirectConsumptionDevice } from "./devices/direct_consumption_device";
+import { NumberEntityWrapper } from "../../entities/number_entity_wrapper";
+import { BinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_wrapper";
+
 import { DeviceLoadManager } from "./device_load_manager";
 import { SystemStateManager } from "./system_state_manager";
 
@@ -55,6 +59,23 @@ export function DaytimeLoadService({
               climateEntityWrapper,
               consumptionSensorWrapper,
               new ClimateHassControls(deviceConfig.name, synapse, context),
+              deviceConfig.opts,
+            );
+          case "direct_consumption":
+            // Create Direct Consumption Device with all required entity wrappers
+            const currentEntityWrapper = new NumberEntityWrapper(hass.refBy.id(deviceConfig.entityId));
+            const directConsumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
+            const voltageEntityWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.voltageEntityId));
+            const enableEntityWrapper = new BooleanEntityWrapper(hass.refBy.id(deviceConfig.enableEntityId));
+            const canEnableEntityWrapper = new BinarySensorEntityWrapper(hass.refBy.id(deviceConfig.canEnableEntityId));
+            return new DirectConsumptionDevice(
+              deviceConfig.name,
+              deviceConfig.priority,
+              currentEntityWrapper,
+              directConsumptionSensorWrapper,
+              voltageEntityWrapper,
+              enableEntityWrapper,
+              canEnableEntityWrapper,
               deviceConfig.opts,
             );
           default:
