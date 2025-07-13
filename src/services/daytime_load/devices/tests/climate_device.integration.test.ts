@@ -32,6 +32,7 @@ describe("ClimateDevice Integration Tests", () => {
 
     mockSensorEntity = {
       state: 0,
+      onUpdate: vi.fn(),
     };
 
     config = {

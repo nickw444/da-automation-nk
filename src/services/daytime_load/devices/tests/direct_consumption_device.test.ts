@@ -23,10 +23,12 @@ describe("DirectConsumptionDevice", () => {
 
         mockConsumptionEntity = {
             state: 0,
+            onUpdate: vi.fn(),
         };
 
         mockVoltageEntity = {
             state: 240, // Standard voltage
+            onUpdate: vi.fn(),
         };
 
         mockEnableEntity = {
@@ -37,6 +39,7 @@ describe("DirectConsumptionDevice", () => {
 
         mockCanEnableEntity = {
             state: "on", // Default to allowing enable
+            onUpdate: vi.fn(),
         };
 
         config = {

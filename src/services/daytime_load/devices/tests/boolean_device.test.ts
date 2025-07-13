@@ -17,6 +17,7 @@ describe("BooleanDevice", () => {
     
     mockSensorEntity = {
       state: 0,
+      onUpdate: vi.fn(),
     };
 
     device = new BooleanDevice(

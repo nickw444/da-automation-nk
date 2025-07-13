@@ -7,7 +7,6 @@ export interface ISensorEntityWrapper {
 
 export interface MockSensorEntityWrapper extends ISensorEntityWrapper {
   state: string | number;
-  onUpdate: RemovableCallback<PICK_ENTITY<"sensor">>;
 }
 
 export class SensorEntityWrapper implements ISensorEntityWrapper {

@@ -2,7 +2,7 @@ import { ByIdProxy, PICK_ENTITY, RemovableCallback } from "@digital-alchemy/hass
 
 export interface IBinarySensorEntityWrapper {
   get state(): "on" | "off";
-  get onUpdate(): RemovableCallback<PICK_ENTITY<"binary_sensor">>
+  onUpdate: RemovableCallback<PICK_ENTITY<"binary_sensor">>
 }
 
 export interface MockBinarySensorEntityWrapper extends IBinarySensorEntityWrapper {
