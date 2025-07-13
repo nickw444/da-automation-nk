@@ -13,7 +13,7 @@ export interface MockBooleanEntityWrapper extends IBooleanEntityWrapper {
 export class BooleanEntityWrapper implements IBooleanEntityWrapper {
   constructor(
     private readonly entityRef: ByIdProxy<
-      PICK_ENTITY<"switch" | "light" | "fan">
+      PICK_ENTITY<"switch" | "light" | "fan" | "input_boolean">
     >
   ) {}
 

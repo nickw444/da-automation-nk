@@ -23,6 +23,4 @@ describe("SensorEntityWrapper", () => {
         expect(wrapper.state).toBe(42);
       });
   });
-
-
 });

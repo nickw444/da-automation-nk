@@ -39,6 +39,4 @@ describe("BinarySensorEntityWrapper", () => {
         expect(wrapper.state).toBe("off");
       });
   });
-
-
 });
