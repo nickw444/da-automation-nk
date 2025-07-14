@@ -35,7 +35,7 @@ export interface ClimateDeviceOptions {
 // User control interface for ClimateDevice
 export interface IClimateHassControls {
     desiredSetpoint: number;        // User's target temperature
-    desiredMode: "heat" | "cool";   // User's desired operating mode
+    desiredMode: "heat" | "cool" | "off";   // User's desired operating mode
     comfortSetpoint?: number;       // Optional comfort boundary temperature (limits decrease operations only)
 }
 
@@ -92,6 +92,11 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         const desiredSetpoint = this.hassControls.desiredSetpoint;
         const desiredMode = this.hassControls.desiredMode;
         const increments: ClimateIncrement[] = [];
+
+        // If desired mode is "off", no increase increments are available
+        if (desiredMode === "off") {
+            return [];
+        }
 
         // Handle device-off case (startup power calculation)
         if (this.climateEntityRef.state === "off") {
@@ -558,7 +563,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 device_id: subDevice,
                 name: "Desired Mode",
                 unique_id: "daytime_load_" + toSnakeCase(name) + "_desired_mode",
-                options: ["heat", "cool"],
+                options: ["heat", "cool", "off"],
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"select">>;
 
@@ -580,12 +585,14 @@ export class ClimateHassControls implements IClimateHassControls {
         return this.desiredSetpointEntity.state;
     }
 
-    get desiredMode(): "heat" | "cool" {
+    get desiredMode(): "heat" | "cool" | "off" {
         switch (this.desiredModeEntity.state) {
             case "heat":
                 return "heat";
             case "cool":
                 return "cool";
+            case "off":
+                return "off";
             default:
                 throw new Error(
                     "Invalid desired mode: " + this.desiredModeEntity.state,

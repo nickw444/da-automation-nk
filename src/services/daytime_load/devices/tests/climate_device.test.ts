@@ -144,6 +144,19 @@ describe("ClimateDevice", () => {
         ]);
       });
 
+      it("should return empty array when desired mode is off", () => {
+        mockClimateEntity.state = "off";
+        mockClimateEntity.attributes.current_temperature = 22; // Room temp
+        mockSensorEntity.state = 0; // Device off, no consumption
+        
+        // Set desired mode to off
+        hassControls.desiredMode = "off";
+        
+        const increments = device.increaseIncrements;
+        
+        expect(increments).toEqual([]);
+      });
+
       it("should move toward desired setpoint regardless of comfort bounds for startup", () => {
         mockClimateEntity.state = "off";
         mockClimateEntity.attributes.current_temperature = 26; // Room temp
@@ -199,6 +212,20 @@ describe("ClimateDevice", () => {
           // Note: Further increments would all produce delta=1300W due to maxCompressorConsumption clamping,
           // so they get filtered out by the duplicate delta check
         ]);
+      });
+
+      it("should return empty array when device is on and desired mode is off", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.current_temperature = 26; // Room temp (hot)
+        mockClimateEntity.attributes.temperature = 24; // Current setpoint
+        mockSensorEntity.state = 1200; // Current consumption
+        
+        // Set desired mode to off
+        hassControls.desiredMode = "off";
+        
+        const increments = device.increaseIncrements;
+        
+        expect(increments).toEqual([]);
       });
 
       it("should return setpoint increase increments when device is on", () => {
