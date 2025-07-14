@@ -10,16 +10,16 @@ Create a new file in `src/services/${automation_name}.ts`:
 
 ```typescript
 import { TServiceParams } from "@digital-alchemy/core";
-import { BooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
-import { BinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
-import { SensorEntityWrapper } from "../entities/sensor_entity_wrapper";
+import { BooleanEntityWrapper, IBooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
+import { BinarySensorEntityWrapper, IBinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
+import { SensorEntityWrapper, ISensorEntityWrapper } from "../entities/sensor_entity_wrapper";
 
 export class MyAutomationService {
     constructor(
         private readonly logger: TServiceParams['logger'],
-        private readonly lightEntity: BooleanEntityWrapper,
-        private readonly motionEntity: BinarySensorEntityWrapper,
-        private readonly luxEntity: SensorEntityWrapper,
+        private readonly lightEntity: IBooleanEntityWrapper,
+        private readonly motionEntity: IBinarySensorEntityWrapper,
+        private readonly luxEntity: ISensorEntityWrapper,
     ) {
         // TODO: Set up entity event listeners
         this.motionEntity.onUpdate((newState, oldState) => {
@@ -128,9 +128,9 @@ describe("MyAutomationService", () => {
 
     automation = new MyAutomationService(
       mockLogger,
-      mockLightEntities as unknown as import("../../entities/boolean_entity_wrapper").BooleanEntityWrapper[],
-      mockMotionEntity as unknown as import("../../entities/binary_sensor_entity_wrapper").BinarySensorEntityWrapper,
-      mockLuxEntity as unknown as import("../../entities/sensor_entity_wrapper").SensorEntityWrapper
+      mockLightEntities,
+      mockMotionEntity,
+      mockLuxEntity,
     );
 
     vi.clearAllMocks(); // Clear setup calls

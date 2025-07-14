@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
-import { BackyardFountainPresenceAutomation } from "../backyard_fountain_presence";
-import { MockBooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
-import { MockBinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_wrapper";
+import { BackyardFountainPresenceAutomation } from "../service";
+import { MockBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
+import { MockBinarySensorEntityWrapper } from "../../../entities/binary_sensor_entity_wrapper";
 import type { ILogger } from "@digital-alchemy/core";
 
 interface TestBooleanEntity extends MockBooleanEntityWrapper {
@@ -58,9 +58,9 @@ describe("BackyardFountainPresenceAutomation", () => {
 
     automation = new BackyardFountainPresenceAutomation(
       mockLogger,
-      mockFountainEntity as unknown as import("../../entities/boolean_entity_wrapper").BooleanEntityWrapper,
-      mockDeckPresenceEntity as unknown as import("../../entities/binary_sensor_entity_wrapper").BinarySensorEntityWrapper,
-      mockAllPresenceEntities as unknown as import("../../entities/binary_sensor_entity_wrapper").BinarySensorEntityWrapper[]
+      mockFountainEntity,
+      mockDeckPresenceEntity,
+      mockAllPresenceEntities,
     );
 
     vi.clearAllMocks(); // Clear setup calls

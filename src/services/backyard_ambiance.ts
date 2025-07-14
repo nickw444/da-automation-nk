@@ -1,7 +1,7 @@
 import { TServiceParams } from "@digital-alchemy/core";
-import { BooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
-import { BinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
-import { SensorEntityWrapper } from "../entities/sensor_entity_wrapper";
+import { BooleanEntityWrapper, IBooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
+import { BinarySensorEntityWrapper, IBinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
+import { ISensorEntityWrapper, SensorEntityWrapper } from "../entities/sensor_entity_wrapper";
 
 const LIGHTS_OFF_DELAY_MS = 10 * 60 * 1000; // 10 minutes
 const LUX_THRESHOLD = 1000;
@@ -12,10 +12,10 @@ export class BackyardAmbianceAutomation {
 
     constructor(
         private readonly logger: TServiceParams['logger'],
-        private readonly lightEntities: BooleanEntityWrapper[],
-        private readonly doorEntity: BinarySensorEntityWrapper,
-        private readonly occupancyEntities: BinarySensorEntityWrapper[],
-        private readonly outdoorIlluminationEntity: SensorEntityWrapper,
+        private readonly lightEntities: IBooleanEntityWrapper[],
+        private readonly doorEntity: IBinarySensorEntityWrapper,
+        private readonly occupancyEntities: IBinarySensorEntityWrapper[],
+        private readonly outdoorIlluminationEntity: ISensorEntityWrapper,
     ) {
         this.setupAutomation();
     }

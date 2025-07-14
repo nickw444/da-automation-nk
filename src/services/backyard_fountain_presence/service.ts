@@ -1,6 +1,6 @@
 import { TServiceParams } from "@digital-alchemy/core";
-import { BooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
-import { BinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
+import { IBooleanEntityWrapper, BooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
+import { BinarySensorEntityWrapper, IBinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_wrapper";
 
 const PRESENCE_ON_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 const PRESENCE_OFF_DELAY_MS = 5 * 60 * 1000; // 5 minutes
@@ -11,9 +11,9 @@ export class BackyardFountainPresenceAutomation {
 
     constructor(
         private readonly logger: TServiceParams['logger'],
-        private readonly fountainEntity: BooleanEntityWrapper,
-        private readonly deckPresenceEntity: BinarySensorEntityWrapper,
-        private readonly allPresenceEntities: BinarySensorEntityWrapper[],
+        private readonly fountainEntity: IBooleanEntityWrapper,
+        private readonly deckPresenceEntity: IBinarySensorEntityWrapper,
+        private readonly allPresenceEntities: IBinarySensorEntityWrapper[],
     ) {
         this.setupAutomation();
     }

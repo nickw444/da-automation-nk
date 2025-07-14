@@ -96,10 +96,10 @@ describe("BackyardAmbianceAutomation", () => {
 
     automation = new BackyardAmbianceAutomation(
       mockLogger,
-      mockLightEntities as unknown as import("../../entities/boolean_entity_wrapper").BooleanEntityWrapper[],
-      mockDoorEntity as unknown as import("../../entities/binary_sensor_entity_wrapper").BinarySensorEntityWrapper,
-      mockOccupancyEntities as unknown as import("../../entities/binary_sensor_entity_wrapper").BinarySensorEntityWrapper[],
-      mockOutdoorIlluminationEntity as unknown as import("../../entities/sensor_entity_wrapper").SensorEntityWrapper
+      mockLightEntities,
+      mockDoorEntity,
+      mockOccupancyEntities,
+      mockOutdoorIlluminationEntity,
     );
 
     // Clear mocks after setup to ignore any initial state processing
