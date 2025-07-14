@@ -4,6 +4,7 @@ import { LIB_SYNAPSE } from "@digital-alchemy/synapse";
 import { LIB_AUTOMATION } from "@digital-alchemy/automation";
 import { DaytimeLoadService } from "./services/daytime_load/service";
 import { BackyardAmbianceAutomation } from "./services/backyard_ambiance";
+import { BackyardFountainPresenceAutomation } from "./services/backyard_fountain_presence";
 
 export const MY_APPLICATION = CreateApplication({
   name: "da_automation",
@@ -11,6 +12,7 @@ export const MY_APPLICATION = CreateApplication({
   services: {
     // daytimeLoad: DaytimeLoadService,
     backyardAmbianceAutomation: BackyardAmbianceAutomation.create,
+    backyardFountainPresence: BackyardFountainPresenceAutomation.create,
   },
   configuration: {
   },
