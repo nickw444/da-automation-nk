@@ -1,0 +1,255 @@
+title: Daytime Load Management
+path: daytime-load-management
+icon: mdi:solar-power-variant
+layout:
+  type: sections
+badges: []
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: System Status
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.daytime_load_management_active
+            name: Load Management Active
+            icon: mdi:auto-mode
+      - type: gauge
+        entity: sensor.inverter_total_active_power_mean_1m
+        name: Solar Production (1m)
+        min: 0
+        max: 5000
+        severity:
+          green: 100
+          yellow: 50
+          red: 0
+        needle: true
+        grid_options:
+          columns: 4
+          rows: 2
+      - type: gauge
+        entity: sensor.inverter_meter_power_mean_1m
+        name: Grid Power (1m)
+        min: -5000
+        max: 5000
+        severity:
+          green: -5000
+          yellow: 0
+          red: 500
+        needle: true
+        grid_options:
+          columns: 4
+          rows: 2
+      - type: heading
+        heading_style: subtitle
+        heading: System History
+      - type: history-graph
+        hours_to_show: 3
+        refresh_interval: 30
+        entities:
+          - entity: binary_sensor.daytime_load_management_active
+            name: Load Management Active
+        logarithmic_scale: false
+        show_names: false
+      - type: heading
+        heading_style: subtitle
+        heading: Energy Graphs
+      - type: history-graph
+        hours_to_show: 3
+        refresh_interval: 30
+        entities:
+          - entity: sensor.inverter_total_active_power_mean_1m
+            name: Solar Production
+          - entity: sensor.inverter_meter_power_mean_1m
+            name: Grid Power
+  - type: grid
+    cards:
+      - type: heading
+        heading: Energy Wheel
+        heading_style: title
+      - type: custom:power-flow-card-plus
+        entities:
+          battery: {}
+          grid:
+            secondary_info: {}
+            entity: sensor.inverter_meter_power
+          solar:
+            entity: sensor.inverter_total_active_power
+            display_zero_state: true
+            secondary_info: {}
+            invert_state: false
+            use_metadata: false
+            color_icon: false
+          fossil_fuel_percentage:
+            secondary_info:
+              template: ""
+              unit_white_space: false
+              display_zero: false
+              accept_negative: false
+              decimals: 2
+              icon: ""
+              unit_of_measurement: "%"
+            entity: sensor.grid_fossil_fuel_percentage
+            icon: mdi:wind-turbine
+            name: Renewables
+            display_zero_state: true
+            display_zero: true
+            use_metadata: false
+            state_type: percentage
+          home:
+            secondary_info: {}
+            color_value: true
+            color_icon: true
+            subtract_individual: false
+            use_metadata: false
+            override_state: false
+            entity: sensor.inverter_load_power
+          individual:
+            - entity: sensor.tesla_wall_connector_power
+              secondary_info: {}
+              name: EV Charger
+              icon: mdi:car-electric
+              color:
+                - 60
+                - 180
+                - 50
+              display_zero_state: true
+              display_zero: true
+              calculate_flow_rate: false
+              unit_of_measurement: " W"
+              color_value: false
+        clickable_entities: true
+        display_zero_lines:
+          mode: show
+          transparency: 50
+          grey_color:
+            - 189
+            - 189
+            - 189
+        use_new_flow_rate_model: true
+        w_decimals: 0
+        kw_decimals: 1
+        min_flow_rate: 0.75
+        max_flow_rate: 6
+        min_expected_power: 0.01
+        watt_threshold: 1000
+        transparency_zero_lines: 0
+        sort_individual_devices: false
+        dashboard_link: /lovelace/solar
+        dashboard_link_label: Energy
+        max_expected_power: 14400
+      - type: heading
+        heading: Device Consumption (3 Hours)
+      - type: history-graph
+        hours_to_show: 3
+        refresh_interval: 30
+        entities:
+          - entity: sensor.germination_shelf_current_consumption
+            name: Germination Shelf
+          - entity: sensor.towel_rail_current_consumption
+            name: Towel Rail
+          - entity: sensor.air_conditioning_power
+            name: Hallway Climate
+          - entity: sensor.subfloor_fan_current_consumption
+            name: Subfloor Fan
+          - entity: sensor.tesla_wall_connector_power
+            name: Tesla Charger
+        grid_options:
+          columns: 12
+          rows: 5
+  - type: grid
+    cards:
+      - type: heading
+        icon: mdi:devices
+        heading: Managed Devices
+        heading_style: title
+      - type: heading
+        heading: Hallway Climate (Priority 1)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: climate.hallway
+            name: Hallway Climate
+            icon: mdi:air-conditioner
+            secondary_info: Priority 1 • Variable Power
+          - entity: sensor.air_conditioning_power
+            name: Current Consumption
+            icon: mdi:flash
+          - entity: number.daytime_load_hallway_climate_desired_setpoint
+            name: Desired Setpoint
+            icon: mdi:thermostat
+          - entity: select.daytime_load_hallway_climate_desired_mode
+            name: Desired Mode
+            icon: mdi:hvac
+          - entity: number.daytime_load_hallway_climate_comfort_setpoint
+            name: Comfort Setpoint
+            icon: mdi:home-thermometer
+      - type: heading
+        heading: Germination Shelf (Priority 2)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: switch.germination_shelf
+            name: Germination Shelf
+            icon: mdi:sprout
+            secondary_info: Priority 2 • 80W Expected
+          - entity: sensor.germination_shelf_current_consumption
+            name: Current Consumption
+            icon: mdi:flash
+      - type: heading
+        heading: Towel Rail (Priority 2)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: switch.towel_rail
+            name: Towel Rail
+            icon: mdi:radiator
+            secondary_info: Priority 2 • 80W Expected
+          - entity: sensor.towel_rail_current_consumption
+            name: Current Consumption
+            icon: mdi:flash
+      - type: heading
+        heading: Subfloor Fan (Priority 3)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: switch.subfloor_fan
+            name: Subfloor Fan
+            icon: mdi:fan
+            secondary_info: Priority 3 • 50W Expected
+          - entity: sensor.subfloor_fan_current_consumption
+            name: Current Consumption
+            icon: mdi:flash
+      - type: heading
+        heading: Tesla Charger (Priority 100)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: switch.charger
+            name: Tesla Charger Enable
+            icon: mdi:car-electric
+            secondary_info: Priority 100 • Variable Power
+          - entity: sensor.tesla_wall_connector_power
+            name: Current Consumption
+            icon: mdi:flash
+          - entity: number.tesla_ble_972a00_charging_amps
+            name: Charging Amps
+            icon: mdi:current-ac
+          - entity: sensor.tesla_wall_connector_grid_voltage
+            name: Grid Voltage
+            icon: mdi:sine-wave
+          - entity: binary_sensor.daytime_load_tesla_can_start_charging
+            name: Can Start Charging
+            icon: mdi:battery-charging-outline
+          - entity: input_boolean.daytime_load_tesla_enable_charging
+cards: []
+type: sections
+max_columns: 3
+dense_section_placement: true
+top_margin: false
