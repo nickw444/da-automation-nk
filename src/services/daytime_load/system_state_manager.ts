@@ -13,11 +13,9 @@ export class SystemStateManager {
   constructor(
     private readonly logger: ILogger,
     private readonly pvProductionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
+    private readonly enableSystemSwitch: ByIdProxy<PICK_ENTITY<"switch">>,
   ) {
-    if (
-      unwrapNumericState(pvProductionSensor.state) >
-      appConfig.pvProductionActivationThreshold
-    ) {
+    if (this.getDesiredState() === "RUNNING") {
       this.state = "RUNNING";
     }
 
@@ -25,16 +23,39 @@ export class SystemStateManager {
       const pvProduction = unwrapNumericState(state.state);
       this.onPvProductionUpdate(pvProduction);
     });
+
+    enableSystemSwitch.onUpdate((state, previousState) => {
+      if (!state) {
+        return;
+      }
+      this.onSwitchStateUpdate();
+    });
+  }
+
+  private getDesiredState(): "STOPPED" | "RUNNING" {
+    const pvProduction = unwrapNumericState(this.pvProductionSensor.state);
+    const switchEnabled = this.enableSystemSwitch.state === "on";
+    
+    return pvProduction != null && 
+           pvProduction > appConfig.pvProductionActivationThreshold && 
+           switchEnabled
+      ? "RUNNING"
+      : "STOPPED";
   }
 
   private onPvProductionUpdate(pvProduction: number | undefined) {
     if (pvProduction == null) {
       return;
     }
-    const desiredState =
-      pvProduction > appConfig.pvProductionActivationThreshold
-        ? "RUNNING"
-        : "STOPPED";
+    this.handleStateChange();
+  }
+
+  private onSwitchStateUpdate() {
+    this.handleStateChange();
+  }
+
+  private handleStateChange() {
+    const desiredState = this.getDesiredState();
     if (this.state === desiredState) {
       // Already in desired state, reset timing
       this.stateChangeStartTime = undefined;

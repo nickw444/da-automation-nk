@@ -11,6 +11,8 @@ import { BinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_w
 
 import { DeviceLoadManager } from "./device_load_manager";
 import { SystemStateManager } from "./system_state_manager";
+import { PICK_ENTITY } from "@digital-alchemy/hass";
+import { ByIdProxy } from "@digital-alchemy/hass";
 
 export function DaytimeLoadService({
   hass,
@@ -87,9 +89,17 @@ export function DaytimeLoadService({
 
     logger.info(`Loaded ${devices.length} devices for daytime load management`);
 
+    const enableSystemSwitch = synapse.switch({
+      context,
+      name: "Daytime Load Management Enabled",
+      unique_id: "daytime_load_management_enabled",
+      suggested_object_id: "daytime_load_management_enabled",
+    }).getEntity() as ByIdProxy<PICK_ENTITY<"switch">>;
+
     const stateManager = new SystemStateManager(
       logger,
       pvProductionSensorMean1m,
+      enableSystemSwitch,
     );
     const loadManager = new DeviceLoadManager(
       devices,
