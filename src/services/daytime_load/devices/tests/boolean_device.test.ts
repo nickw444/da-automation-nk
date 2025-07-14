@@ -13,6 +13,7 @@ describe("BooleanDevice", () => {
       state: "off",
       turn_on: vi.fn(),
       turn_off: vi.fn(),
+      onUpdate: vi.fn(),
     };
     
     mockSensorEntity = {

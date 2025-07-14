@@ -48,16 +48,19 @@ describe("BackyardAmbianceAutomation", () => {
         state: "off",
         turn_on: vi.fn(),
         turn_off: vi.fn(),
+        onUpdate: vi.fn(),
       },
       {
         state: "off", 
         turn_on: vi.fn(),
         turn_off: vi.fn(),
+        onUpdate: vi.fn(),
       },
       {
         state: "off",
         turn_on: vi.fn(),
         turn_off: vi.fn(),
+        onUpdate: vi.fn(),
       },
     ];
 
