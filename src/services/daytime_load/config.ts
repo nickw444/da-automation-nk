@@ -80,9 +80,21 @@ type Config = {
 const devices: DeviceConfig[] = [
   {
     kind: "boolean",
+    entityId: "switch.germination_shelf",
+    consumptionEntityId: "sensor.germination_shelf_current_consumption",
+    priority: 2,
+    name: "Germination Shelf",
+    opts: {
+      expectedConsumption: 80,
+      offToOnDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF (wait) ON
+      onToOffDebounceMs: 1 * 60_000, // 1 minute from OFF to ON (wait) OFF
+    },
+  },
+  {
+    kind: "boolean",
     entityId: "switch.subfloor_fan",
     consumptionEntityId: "sensor.subfloor_fan_current_consumption",
-    priority: 2,
+    priority: 3,
     name: "Subfloor Fan",
     opts: {
       expectedConsumption: 50,
@@ -94,12 +106,12 @@ const devices: DeviceConfig[] = [
     kind: "boolean",
     entityId: "switch.towel_rail",
     consumptionEntityId: "sensor.towel_rail_current_consumption",
-    priority: 3,
+    priority: 2,
     name: "Towel Rail",
     opts: {
       expectedConsumption: 80,
       offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+      onToOffDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF
     },
   },
   {
@@ -127,6 +139,25 @@ const devices: DeviceConfig[] = [
       modeDebounceMs: 10 * 60_000,        // 10 minutes
       startupDebounceMs: 10 * 60_000,     // 10 minutes
       fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
+    }
+  },
+  {
+    kind: "direct_consumption",
+    name: "Tesla Charger",
+    priority: 100, // Last priority.
+    entityId: "number.tesla_ble_972a00_charging_amps",
+    consumptionEntityId: "sensor.tesla_wall_connector_power",
+    voltageEntityId: "sensor.tesla_wall_connector_grid_voltage",
+    enableEntityId: "switch.charger",
+    canEnableEntityId: "binary_sensor.daytime_load_tesla_can_start_charging",
+    opts: {
+      startingMinCurrent: 5,
+      maxCurrent: 20,
+      currentStep: 1,
+      debounceMs: 10 * 60_000,
+      // <= 3A for > 10 minutes
+      stoppingThreshold: 3,
+      stoppingTimeoutMs: 10 * 60_000,
     }
   }
 ];

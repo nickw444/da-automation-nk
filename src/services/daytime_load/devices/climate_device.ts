@@ -545,6 +545,10 @@ export class ClimateHassControls implements IClimateHassControls {
                 device_id: subDevice,
                 name: "Desired Setpoint",
                 unique_id: "daytime_load_" + toSnakeCase(name) + "_desired_setpoint",
+                step: 1,
+                native_min_value: 16,
+                native_max_value: 30,
+                mode: 'slider',
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
 
@@ -564,6 +568,10 @@ export class ClimateHassControls implements IClimateHassControls {
                 device_id: subDevice,
                 name: "Comfort Setpoint",
                 unique_id: "daytime_load_" + toSnakeCase(name) + "_comfort_setpoint",
+                step: 1,
+                native_min_value: 16,
+                native_max_value: 30,
+                mode: 'slider',
             })
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
     }
