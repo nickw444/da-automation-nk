@@ -1,6 +1,5 @@
 import type { ILogger } from "@digital-alchemy/core";
 import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
-import { config as appConfig } from "./config";
 import { unwrapNumericState } from "./states_helpers";
 
 export class SystemStateManager {
@@ -14,6 +13,8 @@ export class SystemStateManager {
     private readonly logger: ILogger,
     private readonly pvProductionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
     private readonly enableSystemSwitch: ByIdProxy<PICK_ENTITY<"switch">>,
+    private readonly pvProductionActivationThreshold: number,
+    private readonly pvProductionActivationDelayMs: number,
   ) {
     if (this.getDesiredState() === "RUNNING") {
       this.state = "RUNNING";
@@ -37,7 +38,7 @@ export class SystemStateManager {
     const switchEnabled = this.enableSystemSwitch.state === "on";
     
     return pvProduction != null && 
-           pvProduction > appConfig.pvProductionActivationThreshold && 
+           pvProduction > this.pvProductionActivationThreshold && 
            switchEnabled
       ? "RUNNING"
       : "STOPPED";
@@ -65,12 +66,12 @@ export class SystemStateManager {
       this.stateChangeStartTime = new Date();
       this.targetState = desiredState;
       console.log(
-        `Starting transition to ${desiredState}, waiting ${appConfig.pvProductionActivationDelay}ms`,
+        `Starting transition to ${desiredState}, waiting ${this.pvProductionActivationDelayMs}ms`,
       );
     } else if (this.stateChangeStartTime) {
       // Check if delay has passed
       const elapsedTime = Date.now() - this.stateChangeStartTime.getTime();
-      if (elapsedTime >= appConfig.pvProductionActivationDelay) {
+      if (elapsedTime >= this.pvProductionActivationDelayMs) {
         this.state = this.targetState;
         console.log(
           `State changed to ${this.state} after ${elapsedTime}ms delay`,

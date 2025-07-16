@@ -67,7 +67,7 @@ type Config = {
   // If the production drops below this threshold after activation, load management will be stopped.
   // Special condition: If the current production is above this threshold at startup, the system will activate immediately.
   pvProductionActivationThreshold: number;
-  pvProductionActivationDelay: number; // in minutes
+  pvProductionActivationDelayMs: number; // in milliseconds
 
   // Desired grid consumption used for "right size" scheduling of devices.
   desiredGridConsumption: number;
@@ -174,7 +174,7 @@ export const config: Config = {
   },
 
   pvProductionActivationThreshold: 500,
-  pvProductionActivationDelay: 15,
+  pvProductionActivationDelayMs: 15 * 60 * 1000, // 15 minutes
 
   maxConsumptionBeforeSheddingLoad: 100,
   minConsumptionBeforeAddingLoad: -400,

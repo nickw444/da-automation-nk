@@ -100,6 +100,8 @@ export function DaytimeLoadService({
       logger,
       pvProductionSensorMean1m,
       enableSystemSwitch,
+      appConfig.pvProductionActivationThreshold,
+      appConfig.pvProductionActivationDelayMs,
     );
     const loadManager = new DeviceLoadManager(
       devices,
