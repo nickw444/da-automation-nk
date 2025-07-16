@@ -22,26 +22,12 @@ export function DaytimeLoadService({
   context,
   synapse,
 }: TServiceParams) {
-  lifecycle.onReady(() => {
-    logger.info("Setting up daytime load management");
-
-    const pvProductionSensor = hass.refBy.id(appConfig.pvProductionEntity.raw);
-    const pvProductionSensorMean1m = hass.refBy.id(
-      appConfig.pvProductionEntity.mean1min,
-    );
-
-    const gridConsumptionSensor = hass.refBy.id(
-      appConfig.gridConsumptionEntity.raw,
-    );
-    const gridConsumptionSensorMean1m = hass.refBy.id(
-      appConfig.gridConsumptionEntity.mean1min,
-    );
-
-    const devices = appConfig.devices
-      .map((deviceConfig) => {
-        switch (deviceConfig.kind) {
-          case "boolean":
-            // Create Boolean Entity and Sensor Entity wrappers
+  const deviceFactories = appConfig.devices
+    .map((deviceConfig) => {
+      switch (deviceConfig.kind) {
+        case "boolean":
+          // Create Boolean Entity and Sensor Entity wrappers
+          return () => {
             const booleanEntityWrapper = new BooleanEntityWrapper(hass.refBy.id(deviceConfig.entityId));
             const booleanConsumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
             return new BooleanDevice(
@@ -51,8 +37,13 @@ export function DaytimeLoadService({
               booleanConsumptionSensorWrapper,
               deviceConfig.opts,
             );
-          case "climate":
-            // Create Climate Entity and Sensor Entity wrappers
+          }
+        case "climate":
+          // Create Climate Entity and Sensor Entity wrappers
+
+          // Eagerly create controls to register synapse entities prior to onReady.
+          const climateHassControls = new ClimateHassControls(deviceConfig.name, synapse, context);
+          return () => {
             const climateEntityWrapper = new ClimateEntityWrapper(hass.refBy.id(deviceConfig.entityId));
             const consumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
             return new ClimateDevice(
@@ -60,11 +51,13 @@ export function DaytimeLoadService({
               deviceConfig.priority,
               climateEntityWrapper,
               consumptionSensorWrapper,
-              new ClimateHassControls(deviceConfig.name, synapse, context),
+              climateHassControls,
               deviceConfig.opts,
             );
-          case "direct_consumption":
-            // Create Direct Consumption Device with all required entity wrappers
+          }
+        case "direct_consumption":
+          // Create Direct Consumption Device with all required entity wrappers
+          return () => {
             const currentEntityWrapper = new NumberEntityWrapper(hass.refBy.id(deviceConfig.entityId));
             const directConsumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
             const voltageEntityWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.voltageEntityId));
@@ -80,26 +73,50 @@ export function DaytimeLoadService({
               canEnableEntityWrapper,
               deviceConfig.opts,
             );
-          default:
-            logger.error(`Unsupported device kind: ${deviceConfig.kind}`);
-            return null;
-        }
-      })
-      .filter(exists);
+          }
+        default:
+          logger.error(`Unsupported device kind: ${deviceConfig.kind}`);
+          return null;
+      }
+    })
+    .filter(exists);
+
+  const systemStatusSensor = synapse.binary_sensor({
+    context,
+    name: "Daytime Load Management Active",
+    device_class: "running",
+    unique_id: "daytime_load_management_active",
+  });
+
+  const enableSystemSwitch = synapse.switch({
+    context,
+    name: "Daytime Load Management Enabled",
+    unique_id: "daytime_load_management_enabled",
+    suggested_object_id: "daytime_load_management_enabled",
+  });
+
+  lifecycle.onReady(() => {
+    logger.info("Setting up daytime load management");
+    const pvProductionSensor = hass.refBy.id(appConfig.pvProductionEntity.raw);
+    const pvProductionSensorMean1m = hass.refBy.id(
+      appConfig.pvProductionEntity.mean1min,
+    );
+
+    const gridConsumptionSensor = hass.refBy.id(
+      appConfig.gridConsumptionEntity.raw,
+    );
+    const gridConsumptionSensorMean1m = hass.refBy.id(
+      appConfig.gridConsumptionEntity.mean1min,
+    );
+
+    const devices = deviceFactories.map((factory) => factory());
 
     logger.info(`Loaded ${devices.length} devices for daytime load management`);
-
-    const enableSystemSwitch = synapse.switch({
-      context,
-      name: "Daytime Load Management Enabled",
-      unique_id: "daytime_load_management_enabled",
-      suggested_object_id: "daytime_load_management_enabled",
-    }).getEntity() as ByIdProxy<PICK_ENTITY<"switch">>;
 
     const stateManager = new SystemStateManager(
       logger,
       pvProductionSensorMean1m,
-      enableSystemSwitch,
+      enableSystemSwitch.getEntity() as ByIdProxy<PICK_ENTITY<"switch">>,
       appConfig.pvProductionActivationThreshold,
       appConfig.pvProductionActivationDelayMs,
     );
@@ -112,13 +129,6 @@ export function DaytimeLoadService({
       appConfig.maxConsumptionBeforeSheddingLoad,
       appConfig.minConsumptionBeforeAddingLoad,
     );
-
-    const systemStatusSensor = synapse.binary_sensor({
-      context,
-      name: "Daytime Load Management Active",
-      device_class: "running",
-      unique_id: "daytime_load_management_active",
-    });
 
     stateManager.onSystemStateChange((newState) => {
       logger.info(`System state changed to ${newState}`);

@@ -556,6 +556,9 @@ export class ClimateHassControls implements IClimateHassControls {
                 native_max_value: 30,
                 mode: 'slider',
             })
+            // Casting to `getEntity()` is a footgun according to the docs, but it's the only way I could figure out
+            // how to assign it to `this` – I cannot figure out how to type the field to be a type-aware synapse 
+            // entity
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
 
         this.desiredModeEntity = synapse
@@ -567,6 +570,9 @@ export class ClimateHassControls implements IClimateHassControls {
                 suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_desired_mode",
                 options: ["heat", "cool", "off"],
             })
+            // Casting to `getEntity()` is a footgun according to the docs, but it's the only way I could figure out
+            // how to assign it to `this` – I cannot figure out how to type the field to be a type-aware synapse 
+            // entity
             .getEntity() as ByIdProxy<PICK_ENTITY<"select">>;
 
         this.comfortSetpointEntity = synapse
@@ -581,6 +587,9 @@ export class ClimateHassControls implements IClimateHassControls {
                 native_max_value: 30,
                 mode: 'slider',
             })
+            // Casting to `getEntity()` is a footgun according to the docs, but it's the only way I could figure out
+            // how to assign it to `this` – I cannot figure out how to type the field to be a type-aware synapse 
+            // entity
             .getEntity() as ByIdProxy<PICK_ENTITY<"number">>;
     }
 
