@@ -514,8 +514,15 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     }
 
     stop(): void {
-        // Turn off device immediately
-        this.climateEntityRef.turnOff();
+        // If there is a comfort setpoint, stop at it
+        if (this.hassControls.comfortSetpoint !== undefined) {
+            this.climateEntityRef.setTemperature({
+                temperature: this.hassControls.comfortSetpoint,
+            });
+        } else {
+            // Turn off device immediately
+            this.climateEntityRef.turnOff();
+        }
 
         // Clear any pending fan-only timeout
         this.clearFanOnlyTimeout();
