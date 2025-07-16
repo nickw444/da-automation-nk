@@ -37,6 +37,7 @@ export interface ClimateDeviceOptions {
 export interface IClimateHassControls extends IBaseHassControls {
     desiredSetpoint: number;        // User's target temperature
     desiredMode: "heat" | "cool" | "off";   // User's desired operating mode
+    enableComfortSetpoint: boolean;
     comfortSetpoint?: number;       // Optional comfort boundary temperature (limits decrease operations only)
 }
 
@@ -280,7 +281,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         if (desiredMode === "heat") {
             // For heating, move setpoint lower (less aggressive heating)
-            const lowerBound = this.hassControls.comfortSetpoint !== undefined
+            const lowerBound = (this.hassControls.enableComfortSetpoint && this.hassControls.comfortSetpoint !== undefined)
                 ? this.hassControls.comfortSetpoint
                 : this.opts.minSetpoint;
 
@@ -307,7 +308,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             }
         } else if (desiredMode === "cool") {
             // For cooling, move setpoint higher (less aggressive cooling)
-            const upperBound = this.hassControls.comfortSetpoint !== undefined
+            const upperBound = (this.hassControls.enableComfortSetpoint && this.hassControls.comfortSetpoint !== undefined)
                 ? this.hassControls.comfortSetpoint
                 : this.opts.maxSetpoint;
 
@@ -335,7 +336,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         }
 
         // Handle mode transitions to fan-only (only when no comfort setpoint specified)
-        if ((currentMode === "heat" || currentMode === "cool") && this.hassControls.comfortSetpoint === undefined) {
+        if ((currentMode === "heat" || currentMode === "cool") && !this.hassControls.enableComfortSetpoint) {
             const fanOnlyReduction = currentConsumption - this.opts.fanOnlyMinConsumption;
             if (fanOnlyReduction > 0) {
                 increments.push({
@@ -543,6 +544,8 @@ export class ClimateHassControls implements IClimateHassControls {
     private readonly desiredModeEntity: { current_option: string };
     // private readonly comfortSetpointEntity: ReturnType<TServiceParams["synapse"]["number"]>;
     private readonly comfortSetpointEntity: { native_value: number };
+    // private readonly comfortSetpointEntity: ReturnType<TServiceParams["synapse"]["number"]>;
+    private readonly enableComfortSetpointEntity: { is_on: boolean };
 
     constructor(
         name: string,
@@ -585,6 +588,15 @@ export class ClimateHassControls implements IClimateHassControls {
                 native_max_value: 30,
                 mode: 'slider',
             })
+
+        this.enableComfortSetpointEntity = synapse
+            .switch({
+                context,
+                device_id: baseControls.subDevice,
+                name: "Enable Comfort Setpoint",
+                unique_id: "daytime_load_" + toSnakeCase(name) + "_enable_comfort_setpoint",
+                suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_enable_comfort_setpoint",
+            })
     }
 
     get desiredSetpoint(): number {
@@ -604,6 +616,10 @@ export class ClimateHassControls implements IClimateHassControls {
                     "Invalid desired mode: " + this.desiredModeEntity.current_option,
                 );
         }
+    }
+
+    get enableComfortSetpoint(): boolean {
+        return this.enableComfortSetpointEntity.is_on;
     }
 
     get comfortSetpoint(): number | undefined {

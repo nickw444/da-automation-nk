@@ -52,6 +52,7 @@ describe("ClimateDevice", () => {
       managementEnabled: true,
       desiredSetpoint: 24,
       desiredMode: "cool",
+      enableComfortSetpoint: true,
       comfortSetpoint: 26,
     };
 
@@ -399,7 +400,7 @@ describe("ClimateDevice", () => {
         // Set up for cooling without comfort setpoint (fan-only allowed)
         hassControls.desiredMode = "cool";
         hassControls.desiredSetpoint = 20;
-        hassControls.comfortSetpoint = undefined; // No comfort limit
+        hassControls.enableComfortSetpoint = false;
         
         const increments = device.decreaseIncrements;
         
@@ -877,6 +878,7 @@ describe("ClimateDevice", () => {
         managementEnabled: true,
         desiredSetpoint: 24,
         desiredMode: "cool" as const,
+        enableComfortSetpoint: false,
       };
 
       expect(() => new ClimateDevice(

@@ -54,6 +54,7 @@ describe("ClimateDevice Integration Tests", () => {
     hassControls = {
       desiredSetpoint: 20,
       desiredMode: "cool",
+      enableComfortSetpoint: true,
       comfortSetpoint: 26, // For cooling, comfort setpoint is max acceptable (warmer than desired)
       managementEnabled: true,
     };
@@ -220,7 +221,7 @@ describe("ClimateDevice Integration Tests", () => {
       mockSensorEntity.state = 1400;
 
       // Remove comfort setpoint to allow fan-only mode
-      hassControls.comfortSetpoint = undefined;
+      hassControls.enableComfortSetpoint = false;
 
       // Step 1: Get decrease increments (should include fan-only)
       const decreaseIncrements = device.decreaseIncrements;
@@ -437,7 +438,7 @@ describe("ClimateDevice Integration Tests", () => {
       (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
 
       const fanOnlyIncrement = { delta: -1250, modeChange: "fan_only" as const };
-      hassControls.comfortSetpoint = undefined; // Allow fan-only
+      hassControls.enableComfortSetpoint = false; // Allow fan-only
 
       device.decreaseConsumptionBy(fanOnlyIncrement);
 

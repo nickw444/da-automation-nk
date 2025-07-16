@@ -187,6 +187,9 @@ sections:
           - entity: select.daytime_load_hallway_climate_desired_mode
             name: Desired Mode
             icon: mdi:hvac
+          - entity: switch.daytime_load_hallway_climate_enable_comfort_setpoint
+            name: Enable Comfort Setpoint
+            icon: mdi:thermometer
           - entity: number.daytime_load_hallway_climate_comfort_setpoint
             name: Comfort Setpoint
             icon: mdi:home-thermometer
