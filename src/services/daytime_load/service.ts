@@ -13,6 +13,7 @@ import { DeviceLoadManager } from "./device_load_manager";
 import { SystemStateManager } from "./system_state_manager";
 import { PICK_ENTITY } from "@digital-alchemy/hass";
 import { ByIdProxy } from "@digital-alchemy/hass";
+import { BaseHassControls } from "./devices/base_controls";
 
 export function DaytimeLoadService({
   hass,
@@ -24,6 +25,7 @@ export function DaytimeLoadService({
 }: TServiceParams) {
   const deviceFactories = appConfig.devices
     .map((deviceConfig) => {
+      const baseHassControls = new BaseHassControls(deviceConfig.name, logger, synapse, context);
       switch (deviceConfig.kind) {
         case "boolean":
           // Create Boolean Entity and Sensor Entity wrappers
@@ -35,14 +37,14 @@ export function DaytimeLoadService({
               deviceConfig.priority,
               booleanEntityWrapper,
               booleanConsumptionSensorWrapper,
+              baseHassControls,
               deviceConfig.opts,
             );
           }
         case "climate":
           // Create Climate Entity and Sensor Entity wrappers
-
           // Eagerly create controls to register synapse entities prior to onReady.
-          const climateHassControls = new ClimateHassControls(deviceConfig.name, synapse, context);
+          const climateHassControls = new ClimateHassControls(deviceConfig.name, synapse, context, baseHassControls);
           return () => {
             const climateEntityWrapper = new ClimateEntityWrapper(hass.refBy.id(deviceConfig.entityId));
             const consumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
@@ -71,6 +73,7 @@ export function DaytimeLoadService({
               voltageEntityWrapper,
               enableEntityWrapper,
               canEnableEntityWrapper,
+              baseHassControls,
               deviceConfig.opts,
             );
           }

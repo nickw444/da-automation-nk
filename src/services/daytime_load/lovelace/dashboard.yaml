@@ -171,6 +171,9 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
+          - entity: switch.daytime_load_hallway_climate_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
           - entity: climate.hallway
             name: Hallway Climate
             icon: mdi:air-conditioner
@@ -193,6 +196,9 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
+          - entity: switch.daytime_load_germination_shelf_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
           - entity: switch.germination_shelf
             name: Germination Shelf
             icon: mdi:sprout
@@ -206,6 +212,9 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
+          - entity: switch.daytime_load_towel_rail_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
           - entity: switch.towel_rail
             name: Towel Rail
             icon: mdi:radiator
@@ -219,6 +228,9 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
+          - entity: switch.daytime_load_subfloor_fan_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
           - entity: switch.subfloor_fan
             name: Subfloor Fan
             icon: mdi:fan
@@ -232,6 +244,9 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
+          - entity: switch.daytime_load_tesla_charger_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
           - entity: switch.charger
             name: Tesla Charger Enable
             icon: mdi:car-electric

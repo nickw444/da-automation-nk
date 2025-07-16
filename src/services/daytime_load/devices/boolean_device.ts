@@ -6,6 +6,7 @@ import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
 import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
+import { IBaseHassControls } from "./base_controls";
 
 export interface BooleanDeviceOptions {
   expectedConsumption: number;  // Expected power consumption in watts
@@ -33,6 +34,7 @@ export class BooleanDevice implements IBaseDevice<BooleanIncreaseIncrement, Bool
     public readonly priority: number,
     private readonly entityRef: IBooleanEntityWrapper,
     private readonly consumptionEntityRef: ISensorEntityWrapper,
+    public readonly baseControls: IBaseHassControls,
     private readonly opts: BooleanDeviceOptions,
   ) {
   }

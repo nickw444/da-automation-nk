@@ -34,6 +34,9 @@ describe("DeviceLoadManager", () => {
       {
         name: "Device1",
         priority: 1,
+        baseControls: {
+          managementEnabled: true,
+        },
         currentConsumption: 0,
         changeState: undefined,
         increaseIncrements: [{ delta: 100 }],
@@ -45,6 +48,9 @@ describe("DeviceLoadManager", () => {
       {
         name: "Device2",
         priority: 2,
+        baseControls: {
+          managementEnabled: true,
+        },
         currentConsumption: 80,
         changeState: undefined,
         increaseIncrements: [],
@@ -56,6 +62,9 @@ describe("DeviceLoadManager", () => {
       {
         name: "Device3",
         priority: 3,
+        baseControls: {
+          managementEnabled: true,
+        },
         currentConsumption: 150,
         changeState: undefined,
         increaseIncrements: [],
@@ -144,14 +153,14 @@ describe("DeviceLoadManager", () => {
   });
 
   it("should shed load from appropriate devices when exceeding max consumption", () => {
-  mockGridSensorMean.state = 900;
-  
-  deviceLoadManager.start();
-  vi.advanceTimersByTime(5000);
+    mockGridSensorMean.state = 900;
 
-  // Should shed load from both devices
-  expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
-  expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
+    deviceLoadManager.start();
+    vi.advanceTimersByTime(5000);
+
+    // Should shed load from both devices
+    expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
+    expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
   });
 
   it("should handle devices with pending changes correctly", () => {
@@ -190,6 +199,26 @@ describe("DeviceLoadManager", () => {
     expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
   });
 
+  it("should skip devices with management disabled during load shedding", () => {
+    mockGridSensorMean.state = 900; // Exceeds max of 800W
+
+    // Create device with management disabled
+    const deviceWithManagementDisabled = {
+      ...mockDevices[2],
+      baseControls: {
+        managementEnabled: false,
+      },
+    };
+    mockDevices[2] = deviceWithManagementDisabled;
+
+    deviceLoadManager.start();
+    vi.advanceTimersByTime(5000);
+
+    // Should skip Device3 (management disabled) and only use Device2
+    expect(mockDevices[2].decreaseConsumptionBy).not.toHaveBeenCalled();
+    expect(mockDevices[1].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -80 });
+  });
+
   describe("Load Adding", () => {
     beforeEach(() => {
       // Reset devices for load adding tests
@@ -197,6 +226,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Device1",
           priority: 1, // High priority - should be added to first
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 100 }],
@@ -208,6 +240,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Device2",
           priority: 2, // Lower priority
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 80 }],
@@ -327,6 +362,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Air Conditioner",
           priority: 1, // Highest priority
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 700 }, { delta: 1000 }, { delta: 1300 }], // All too large for 350W surplus
@@ -338,6 +376,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Germination Light",
           priority: 2,
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 80 }], // Fits in 350W surplus
@@ -349,6 +390,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Subfloor Fan",
           priority: 3,
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 50 }], // Fits in remaining 270W (350-80)
@@ -360,6 +404,9 @@ describe("DeviceLoadManager", () => {
         {
           name: "Heated Towel Rail",
           priority: 4, // Lower priority  
+          baseControls: {
+            managementEnabled: true,
+          },
           currentConsumption: 0,
           changeState: undefined,
           increaseIncrements: [{ delta: 250 }], // Too large for remaining 220W (350-80-50)
@@ -394,6 +441,79 @@ describe("DeviceLoadManager", () => {
 
       // Heated Towel Rail should not be called - 250W doesn't fit in remaining 220W
       expect(testDevices[3].increaseConsumptionBy).not.toHaveBeenCalled();
+    });
+
+    it("should skip devices with management disabled during load adding", () => {
+      mockGridSensorMean.state = 100; // Below min of 200W
+
+      // Create device with management disabled
+      const deviceWithManagementDisabled = {
+        ...mockDevices[0],
+        baseControls: {
+          managementEnabled: false,
+        },
+      };
+      mockDevices[0] = deviceWithManagementDisabled;
+
+      deviceLoadManager.start();
+      vi.advanceTimersByTime(5000);
+
+      // Should skip Device1 (management disabled) and only use Device2
+      expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
+    });
+
+    it("should skip devices with management disabled when accounting for pending increases", () => {
+      mockGridSensorMean.state = 180; // Below min of 200W, need 320W total
+
+      // Create a third device that requires exactly 240W (would only fit if Device1's pending 100W is NOT counted)
+      const device3 = {
+        name: "Device3",
+        priority: 3,
+        baseControls: {
+          managementEnabled: true,
+        },
+        currentConsumption: 0,
+        changeState: undefined,
+        increaseIncrements: [{ delta: 240 }], // Would fit if Device1's pending 100W is NOT counted (320W - 80W = 240W)
+        decreaseIncrements: [],
+        increaseConsumptionBy: vi.fn(),
+        decreaseConsumptionBy: vi.fn(),
+        stop: vi.fn(),
+      };
+
+      // Create device with management disabled and pending increase
+      const deviceWithManagementDisabled = {
+        ...mockDevices[0],
+        baseControls: {
+          managementEnabled: false,
+        },
+        changeState: { type: "increase" as const, expectedFutureConsumption: 100 },
+      };
+
+      // Update device manager with new devices
+      const testDeviceManager = new DeviceLoadManager(
+        [deviceWithManagementDisabled, mockDevices[1], device3],
+        mockLogger,
+        mockGridSensor,
+        mockGridSensorMean,
+        500, // desiredGridConsumption
+        800, // maxConsumptionBeforeSheddingLoad  
+        200, // minConsumptionBeforeAddingLoad
+      );
+
+      testDeviceManager.start();
+      vi.advanceTimersByTime(5000);
+
+      // Device1 should be skipped (management disabled)
+      expect(deviceWithManagementDisabled.increaseConsumptionBy).not.toHaveBeenCalled();
+      
+      // Device2 should be called (80W fits in 320W surplus)
+      expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
+      
+      // Device3 should be called (240W fits in remaining 240W since Device1's pending increase wasn't counted)
+      // If Device1's pending increase WAS counted, only 140W would remain (320W - 100W pending - 80W = 140W < 240W)
+      expect(device3.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 240 });
     });
   });
 
