@@ -79,42 +79,6 @@ type Config = {
 
 const devices: DeviceConfig[] = [
   {
-    kind: "boolean",
-    entityId: "switch.germination_shelf",
-    consumptionEntityId: "sensor.germination_shelf_current_consumption",
-    priority: 2,
-    name: "Germination Shelf",
-    opts: {
-      expectedConsumption: 80,
-      offToOnDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF (wait) ON
-      onToOffDebounceMs: 1 * 60_000, // 1 minute from OFF to ON (wait) OFF
-    },
-  },
-  {
-    kind: "boolean",
-    entityId: "switch.subfloor_fan",
-    consumptionEntityId: "sensor.subfloor_fan_current_consumption",
-    priority: 3,
-    name: "Subfloor Fan",
-    opts: {
-      expectedConsumption: 50,
-      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
-    },
-  },
-  {
-    kind: "boolean",
-    entityId: "switch.towel_rail",
-    consumptionEntityId: "sensor.towel_rail_current_consumption",
-    priority: 2,
-    name: "Towel Rail",
-    opts: {
-      expectedConsumption: 80,
-      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-      onToOffDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF
-    },
-  },
-  {
     kind: "climate",
     entityId: "climate.hallway",
     consumptionEntityId: "sensor.air_conditioning_power",
@@ -140,6 +104,42 @@ const devices: DeviceConfig[] = [
       startupDebounceMs: 10 * 60_000,     // 10 minutes
       fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
     }
+  },
+  {
+    kind: "boolean",
+    entityId: "switch.germination_shelf",
+    consumptionEntityId: "sensor.germination_shelf_current_consumption",
+    priority: 2,
+    name: "Germination Shelf",
+    opts: {
+      expectedConsumption: 80,
+      offToOnDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF (wait) ON
+      onToOffDebounceMs: 1 * 60_000, // 1 minute from OFF to ON (wait) OFF
+    },
+  },
+  {
+    kind: "boolean",
+    entityId: "switch.towel_rail",
+    consumptionEntityId: "sensor.towel_rail_current_consumption",
+    priority: 2,
+    name: "Towel Rail",
+    opts: {
+      expectedConsumption: 80,
+      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+      onToOffDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF
+    },
+  },
+  {
+    kind: "boolean",
+    entityId: "switch.subfloor_fan",
+    consumptionEntityId: "sensor.subfloor_fan_current_consumption",
+    priority: 3,
+    name: "Subfloor Fan",
+    opts: {
+      expectedConsumption: 50,
+      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
+      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+    },
   },
   {
     kind: "direct_consumption",
