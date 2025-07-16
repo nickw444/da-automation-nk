@@ -78,6 +78,12 @@ export class DeviceLoadManager {
     for (const device of sortedDevices) {
       if (remainingToShed <= 0) break;
 
+      // Skip if management is disabled
+      if (!device.baseControls.managementEnabled) {
+        this.logger.debug(`Skipping ${device.name} - management disabled`);
+        continue;
+      }
+
       // Skip if device has pending changes or is in debounce
       const changeState = device.changeState;
       if (changeState?.type === "increase" || changeState?.type === "decrease") {
@@ -126,6 +132,11 @@ export class DeviceLoadManager {
 
     // First, account for all pending increases across all devices
     for (const device of sortedDevices) {
+      // Skip if management is disabled
+      if (!device.baseControls.managementEnabled) {
+        continue;
+      }
+
       const changeState = device.changeState;
       if (changeState?.type === "increase") {
         const additionalConsumption =
@@ -139,6 +150,12 @@ export class DeviceLoadManager {
 
     for (const device of sortedDevices) {
       if (remainingToAdd <= 0) break;
+
+      // Skip if management is disabled
+      if (!device.baseControls.managementEnabled) {
+        this.logger.debug(`Skipping ${device.name} - management disabled`);
+        continue;
+      }
 
       // Check if device has pending changes or is in debounce
       const changeState = device.changeState;

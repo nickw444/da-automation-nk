@@ -55,6 +55,7 @@ describe("ClimateDevice Integration Tests", () => {
       desiredSetpoint: 20,
       desiredMode: "cool",
       comfortSetpoint: 26, // For cooling, comfort setpoint is max acceptable (warmer than desired)
+      managementEnabled: true,
     };
 
     device = new ClimateDevice(

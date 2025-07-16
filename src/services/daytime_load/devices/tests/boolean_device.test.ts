@@ -27,6 +27,9 @@ describe("BooleanDevice", () => {
       mockBooleanEntity,
       mockSensorEntity,
       {
+        managementEnabled: true,
+      },
+      {
         expectedConsumption: 50,
         offToOnDebounceMs: 30000,
         onToOffDebounceMs: 10000,

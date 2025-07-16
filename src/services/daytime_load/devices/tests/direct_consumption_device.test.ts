@@ -60,6 +60,9 @@ describe("DirectConsumptionDevice", () => {
             mockVoltageEntity,
             mockEnableEntity,
             mockCanEnableEntity,
+            {
+              managementEnabled: true,
+            },
             config,
         );
     });
@@ -629,6 +632,9 @@ describe("DirectConsumptionDevice", () => {
                         mockVoltageEntity,
                         mockEnableEntity,
                         mockCanEnableEntity,
+                        {
+                            managementEnabled: true,
+                        },
                         config,
                     );
 
@@ -786,6 +792,9 @@ describe("DirectConsumptionDevice", () => {
                 mockVoltageEntity,
                 mockEnableEntity,
                 mockCanEnableEntity,
+                {
+                    managementEnabled: true,
+                },
                 config,
             );
 
@@ -808,6 +817,9 @@ describe("DirectConsumptionDevice", () => {
                 mockVoltageEntity,
                 mockEnableEntity,
                 mockCanEnableEntity,
+                {
+                    managementEnabled: true,
+                },
                 config,
             );
 
@@ -836,6 +848,9 @@ describe("DirectConsumptionDevice", () => {
                 mockVoltageEntity,
                 mockEnableEntity,
                 mockCanEnableEntity,
+                {
+                    managementEnabled: true,
+                },
                 config,
             );
 
@@ -935,6 +950,9 @@ describe("DirectConsumptionDevice", () => {
                 mockVoltageEntity,
                 mockEnableEntity,
                 mockCanEnableEntity,
+                {
+                    managementEnabled: true,
+                },
                 config,
             )).not.toThrow();
         });
@@ -950,6 +968,9 @@ describe("DirectConsumptionDevice", () => {
                 mockVoltageEntity,
                 mockEnableEntity,
                 mockCanEnableEntity,
+                {
+                    managementEnabled: true,
+                },
                 customConfig,
             );
 

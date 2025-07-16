@@ -1,6 +1,9 @@
+import { IBaseHassControls } from "./base_controls";
+
 export interface IBaseDevice<T extends {delta: number}, U extends {delta: number}> {
   name: string;
   priority: number;
+  get baseControls(): IBaseHassControls;
 
   // Amount of energy that can still be allocated to this device to be consumed
   // Separate types for increase and decrease increments

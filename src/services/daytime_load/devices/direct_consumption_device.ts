@@ -8,6 +8,7 @@ import { INumberEntityWrapper } from "../../../entities/number_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
 import { IBinarySensorEntityWrapper } from "../../../entities/binary_sensor_entity_wrapper";
+import { IBaseHassControls } from "./base_controls";
 
 export interface DirectConsumptionDeviceOptions {
     // Current Configuration
@@ -44,6 +45,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         private readonly voltageEntityRef: ISensorEntityWrapper,
         private readonly enableEntityRef: IBooleanEntityWrapper,
         private readonly canEnableEntityRef: IBinarySensorEntityWrapper,
+        public readonly baseControls: IBaseHassControls,
         private readonly opts: DirectConsumptionDeviceOptions,
     ) {
         // Start monitoring for auto-stop condition

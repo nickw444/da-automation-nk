@@ -49,6 +49,7 @@ describe("ClimateDevice", () => {
     };
 
     hassControls = {
+      managementEnabled: true,
       desiredSetpoint: 24,
       desiredMode: "cool",
       comfortSetpoint: 26,
@@ -873,6 +874,7 @@ describe("ClimateDevice", () => {
 
     it("should accept hassControls without comfort setpoint", () => {
       const controlsWithoutComfort = {
+        managementEnabled: true,
         desiredSetpoint: 24,
         desiredMode: "cool" as const,
       };
