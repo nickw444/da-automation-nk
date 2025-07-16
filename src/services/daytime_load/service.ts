@@ -89,6 +89,7 @@ export function DaytimeLoadService({
     name: "Daytime Load Management Active",
     device_class: "running",
     unique_id: "daytime_load_management_active",
+    icon: "mdi:auto-mode",
   });
 
   const enableSystemSwitch = synapse.switch({

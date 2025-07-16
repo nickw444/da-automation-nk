@@ -26,9 +26,10 @@ export class BaseHassControls implements IBaseHassControls {
         const enableSystemSwitch = synapse.switch({
             context,
             device_id: this.subDevice,
-            name: "Daytime Load " + name + " Management Enabled",
+            name: "Management Enabled",
             unique_id: "daytime_load_" + toSnakeCase(name) + "_management_enabled",
             suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_management_enabled",
+            icon: "mdi:cog",
         });
         enableSystemSwitch.onUpdate((newState) => {
             if (newState.state === 'unknown') {

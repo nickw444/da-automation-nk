@@ -564,6 +564,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 native_min_value: 16,
                 native_max_value: 30,
                 mode: 'slider',
+                icon: "mdi:thermostat",
             })
 
         this.desiredModeEntity = synapse
@@ -574,6 +575,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 unique_id: "daytime_load_" + toSnakeCase(name) + "_desired_mode",
                 suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_desired_mode",
                 options: ["heat", "cool", "off"],
+                icon: "mdi:hvac",
             })
 
         this.comfortSetpointEntity = synapse
@@ -587,6 +589,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 native_min_value: 16,
                 native_max_value: 30,
                 mode: 'slider',
+                icon: "mdi:home-thermometer",
             })
 
         this.enableComfortSetpointEntity = synapse
@@ -596,6 +599,7 @@ export class ClimateHassControls implements IClimateHassControls {
                 name: "Enable Comfort Setpoint",
                 unique_id: "daytime_load_" + toSnakeCase(name) + "_enable_comfort_setpoint",
                 suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_enable_comfort_setpoint",
+                icon: "mdi:thermometer",
             })
     }
 
