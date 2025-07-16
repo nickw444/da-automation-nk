@@ -15,6 +15,7 @@ sections:
           - entity: binary_sensor.daytime_load_management_active
             name: Load Management Active
             icon: mdi:auto-mode
+          - entity: switch.daytime_load_management_enabled
       - type: gauge
         entity: sensor.inverter_total_active_power_mean_1m
         name: Solar Production (1m)
@@ -248,6 +249,12 @@ sections:
             name: Can Start Charging
             icon: mdi:battery-charging-outline
           - entity: input_boolean.daytime_load_tesla_enable_charging
+          - entity: number.tesla_ble_972a00_charging_limit
+          - entity: sensor.battery
+          - type: section
+            label: API Entities
+          - entity: number.charge_limit
+          - entity: number.charging_amps
 cards: []
 type: sections
 max_columns: 3
