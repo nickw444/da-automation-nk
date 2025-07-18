@@ -9,6 +9,7 @@ import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 import { IBooleanEntityWrapper } from "../../../entities/boolean_entity_wrapper";
 import { IBinarySensorEntityWrapper } from "../../../entities/binary_sensor_entity_wrapper";
 import { IBaseHassControls } from "./base_controls";
+import { TServiceParams } from "@digital-alchemy/core";
 
 export interface DirectConsumptionDeviceOptions {
     // Current Configuration
@@ -39,6 +40,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
     constructor(
         readonly name: string,
         readonly priority: number,
+        private readonly logger: TServiceParams['logger'],
         private readonly currentEntityRef: INumberEntityWrapper,
         private readonly consumptionEntityRef: ISensorEntityWrapper,
         private readonly voltageEntityRef: ISensorEntityWrapper,
@@ -66,16 +68,20 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         const currentCurrent = this.currentEntityRef.state;
 
         if (!this.baseControls.managementEnabled) {
+            this.logger.info(`${this.name} increaseIncrements: management disabled, no increments available`);
             return [];
         }
 
         // Handle device-disabled case (startup)
         if (this.enableEntityRef.state === "off") {
+            this.logger.info(`${this.name} increaseIncrements: device is disabled, checking if can enable`);
             // Check if device is allowed to be enabled
             if (this.canEnableEntityRef.state === "off") {
+                this.logger.info(`${this.name} increaseIncrements: • device cannot be enabled, no increments available`);
                 return []; // Device cannot be enabled, return no increments
             }
             // Generate increments for all possible current levels from startingMinCurrent to maxCurrent
+            this.logger.info(`${this.name} increaseIncrements: • generating enable increments from ${this.opts.startingMinCurrent}A to ${this.opts.maxCurrent}A`);
             const step = this.opts.currentStep;
             const currentTheoreticalPower = 0; // Device is off, so baseline is 0
 
@@ -110,6 +116,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         // Example: Current=4A, Consumption=240W(1A) → Gap=3A >= 2 increments → No more increments
         // This indicates the device has unused capacity and should utilize current setting first
         if (consumptionGap >= (2 * step)) {
+            this.logger.info(`${this.name} increaseIncrements: device has unused capacity (gap: ${consumptionGap.toFixed(1)}A >= ${2 * step}A), no increments available`);
             return increments; // Return empty array
         }
 
@@ -147,11 +154,13 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         const actualConsumption = this.currentConsumption;
 
         if (!this.baseControls.managementEnabled) {
+            this.logger.info(`${this.name} decreaseIncrements: management disabled, no decrements available`);
             return [];
         }
 
         // Handle device-disabled case - no decreases possible
         if (this.enableEntityRef.state !== "on") {
+            this.logger.info(`${this.name} decreaseIncrements: device is disabled, no decrements possible`);
             return [];
         }
 
@@ -251,12 +260,14 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         const isEnabled = this.enableEntityRef.state === "on";
 
         if (isEnabled && currentCurrent < this.opts.stoppingThreshold) {
+            this.logger.info(`${this.name} startStoppingThresholdMonitoring: current ${currentCurrent}A below threshold ${this.opts.stoppingThreshold}A, starting ${this.opts.stoppingTimeoutMs}ms timeout`);
             this.stoppingTimeoutTimer = setTimeout(() => {
                 // Double-check conditions before auto-stopping
                 const stillEnabled = this.enableEntityRef.state === "on";
                 const stillBelowThreshold = this.currentEntityRef.state < this.opts.stoppingThreshold;
 
                 if (stillEnabled && stillBelowThreshold) {
+                    this.logger.info(`${this.name} startStoppingThresholdMonitoring: threshold timeout expired, disabling device`);
                     this.enableEntityRef.turn_off();
 
                     // Reset state machine to idle after auto-stop
@@ -270,6 +281,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
 
     private clearStoppingTimeout(): void {
         if (this.stoppingTimeoutTimer) {
+            this.logger.info(`${this.name} clearStoppingTimeout: clearing stopping timeout`);
             clearTimeout(this.stoppingTimeoutTimer);
             this.stoppingTimeoutTimer = null;
         }
@@ -278,14 +290,18 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
     increaseConsumptionBy(increment: DirectConsumptionIncrement): void {
         DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
+        this.logger.info(`${this.name} increaseConsumptionBy: increasing by ${increment.delta}W`);
+
         // Execute encoded actions based on increment properties
         if (increment.action === "enable") {
             // Check if device is allowed to be enabled
             if (this.canEnableEntityRef.state === "off") {
+                this.logger.info(`${this.name} increaseConsumptionBy: • device cannot be enabled, exiting silently`);
                 return; // Device cannot be enabled, exit silently
             }
 
             // Enable device and set starting current
+            this.logger.info(`${this.name} increaseConsumptionBy: • enabling device and setting current to ${increment.targetCurrent}A`);
             this.enableEntityRef.turn_on();
             if (increment.targetCurrent !== undefined) {
                 this.currentEntityRef.setValue(increment.targetCurrent);
@@ -302,10 +318,12 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
             );
         } else if (increment.targetCurrent !== undefined) {
             if (this.enableEntityRef.state !== "on") {
+                this.logger.info(`${this.name} increaseConsumptionBy: • device is not enabled, exiting silently`);
                 return;
             }
             
             // Adjust current level
+            this.logger.info(`${this.name} increaseConsumptionBy: • adjusting current to ${increment.targetCurrent}A`);
             this.currentEntityRef.setValue(increment.targetCurrent);
 
             // Restart stopping threshold monitoring
@@ -323,14 +341,18 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
     decreaseConsumptionBy(increment: DirectConsumptionIncrement): void {
         DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
+        this.logger.info(`${this.name} decreaseConsumptionBy: decreasing by ${increment.delta}W`);
+
         // Only allow decrease operations when device is enabled
         if (this.enableEntityRef.state !== "on") {
+            this.logger.info(`${this.name} decreaseConsumptionBy: • device is not enabled, exiting silently`);
             return;
         }
 
         // Execute decrease actions (only targetCurrent adjustments)
         if (increment.targetCurrent !== undefined) {
             // Adjust current level
+            this.logger.info(`${this.name} decreaseConsumptionBy: • adjusting current to ${increment.targetCurrent}A`);
             this.currentEntityRef.setValue(increment.targetCurrent);
 
             // Restart stopping threshold monitoring
@@ -346,6 +368,8 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
     }
 
     stop(): void {
+        this.logger.info(`${this.name} stop: stopping device and clearing all timers`);
+        
         // Disable device immediately
         this.enableEntityRef.turn_off();
 

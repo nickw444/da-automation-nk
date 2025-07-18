@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ClimateDevice, ClimateDeviceOptions, IClimateHassControls } from "../climate_device";
 import { MockClimateEntityWrapper } from "../../../../entities/climate_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
+import type { ILogger } from "@digital-alchemy/core";
 
 describe("ClimateDevice", () => {
   let mockClimateEntity: MockClimateEntityWrapper;
@@ -9,8 +10,13 @@ describe("ClimateDevice", () => {
   let config: ClimateDeviceOptions;
   let hassControls: IClimateHassControls;
   let device: ClimateDevice;
+  let mockLogger: ILogger;
 
   beforeEach(() => {
+    mockLogger = {
+      info: vi.fn(), debug: vi.fn(), warn: vi.fn(), 
+      error: vi.fn(), fatal: vi.fn(), trace: vi.fn()
+    } as ILogger;
     mockClimateEntity = {
       state: "off",
       attributes: {
@@ -62,6 +68,7 @@ describe("ClimateDevice", () => {
     device = new ClimateDevice(
       "Test Climate Device",
       1,
+      mockLogger,
       mockClimateEntity,
       mockSensorEntity,
       hassControls,
@@ -764,6 +771,7 @@ describe("ClimateDevice", () => {
       const testDevice = new ClimateDevice(
         "Test Climate Device",
         1,
+        mockLogger,
         mockClimateEntity,
         mockSensorEntity,
         hassControls,
@@ -834,6 +842,7 @@ describe("ClimateDevice", () => {
       const testDevice = new ClimateDevice(
         "Test Climate Device",
         1,
+        mockLogger,
         mockClimateEntity,
         mockSensorEntity,
         hassControls,
@@ -868,6 +877,7 @@ describe("ClimateDevice", () => {
       expect(() => new ClimateDevice(
         "Test Climate Device",
         1,
+        mockLogger,
         mockClimateEntity,
         mockSensorEntity,
         hassControls,
@@ -886,6 +896,7 @@ describe("ClimateDevice", () => {
       expect(() => new ClimateDevice(
         "Test Climate Device",
         1,
+        mockLogger,
         mockClimateEntity,
         mockSensorEntity,
         controlsWithoutComfort,

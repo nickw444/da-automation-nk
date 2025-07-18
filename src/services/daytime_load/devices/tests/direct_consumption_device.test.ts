@@ -4,6 +4,7 @@ import { MockNumberEntityWrapper } from "../../../../entities/number_entity_wrap
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
 import { MockBooleanEntityWrapper } from "../../../../entities/boolean_entity_wrapper";
 import { MockBinarySensorEntityWrapper } from "../../../../entities/binary_sensor_entity_wrapper";
+import type { ILogger } from "@digital-alchemy/core";
 
 describe("DirectConsumptionDevice", () => {
     let mockCurrentEntity: MockNumberEntityWrapper;
@@ -13,8 +14,14 @@ describe("DirectConsumptionDevice", () => {
     let mockCanEnableEntity: MockBinarySensorEntityWrapper;
     let config: DirectConsumptionDeviceOptions;
     let device: DirectConsumptionDevice;
+    let mockLogger: ILogger;
 
     beforeEach(() => {
+        mockLogger = {
+            info: vi.fn(), debug: vi.fn(), warn: vi.fn(), 
+            error: vi.fn(), fatal: vi.fn(), trace: vi.fn()
+        } as ILogger;
+
         mockCurrentEntity = {
             state: 0,
             attributes: { min: 0, max: 20, step: 0.5 },
@@ -56,6 +63,7 @@ describe("DirectConsumptionDevice", () => {
         device = new DirectConsumptionDevice(
             "Test Direct Consumption Device",
             1,
+            mockLogger,
             mockCurrentEntity,
             mockConsumptionEntity,
             mockVoltageEntity,
@@ -630,6 +638,7 @@ describe("DirectConsumptionDevice", () => {
                     const testDevice = new DirectConsumptionDevice(
                         "Test Debounce Device",
                         1,
+                        mockLogger,
                         mockCurrentEntity,
                         mockConsumptionEntity,
                         mockVoltageEntity,
@@ -787,6 +796,7 @@ describe("DirectConsumptionDevice", () => {
             const testDevice = new DirectConsumptionDevice(
                 "Test Device",
                 1,
+                mockLogger,
                 mockCurrentEntity,
                 mockConsumptionEntity,
                 mockVoltageEntity,
@@ -812,6 +822,7 @@ describe("DirectConsumptionDevice", () => {
             const testDevice = new DirectConsumptionDevice(
                 "Test Device",
                 1,
+                mockLogger,
                 mockCurrentEntity,
                 mockConsumptionEntity,
                 mockVoltageEntity,
@@ -843,6 +854,7 @@ describe("DirectConsumptionDevice", () => {
             const testDevice = new DirectConsumptionDevice(
                 "Test Device",
                 1,
+                mockLogger,
                 mockCurrentEntity,
                 mockConsumptionEntity,
                 mockVoltageEntity,
@@ -945,6 +957,7 @@ describe("DirectConsumptionDevice", () => {
             expect(() => new DirectConsumptionDevice(
                 "Test Device",
                 1,
+                mockLogger,
                 mockCurrentEntity,
                 mockConsumptionEntity,
                 mockVoltageEntity,
@@ -963,6 +976,7 @@ describe("DirectConsumptionDevice", () => {
             const testDevice = new DirectConsumptionDevice(
                 "Test Device",
                 1,
+                mockLogger,
                 mockCurrentEntity,
                 mockConsumptionEntity,
                 mockVoltageEntity,

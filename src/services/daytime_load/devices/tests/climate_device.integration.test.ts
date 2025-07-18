@@ -3,6 +3,7 @@ import { ClimateDevice, ClimateDeviceOptions, IClimateHassControls } from "../cl
 import { MockClimateEntityWrapper } from "../../../../entities/climate_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
 import { DeviceTransitionState } from "../device_transition_state_machine";
+import type { ILogger } from "@digital-alchemy/core";
 
 describe("ClimateDevice Integration Tests", () => {
   let mockClimateEntity: MockClimateEntityWrapper;
@@ -10,9 +11,15 @@ describe("ClimateDevice Integration Tests", () => {
   let config: ClimateDeviceOptions;
   let hassControls: IClimateHassControls;
   let device: ClimateDevice;
+  let mockLogger: ILogger;
 
   beforeEach(() => {
     vi.useFakeTimers();
+
+    mockLogger = {
+      info: vi.fn(), debug: vi.fn(), warn: vi.fn(), 
+      error: vi.fn(), fatal: vi.fn(), trace: vi.fn()
+    } as ILogger;
 
     mockClimateEntity = {
       state: "off",
@@ -65,6 +72,7 @@ describe("ClimateDevice Integration Tests", () => {
     device = new ClimateDevice(
       "Integration Test Climate",
       1,
+      mockLogger,
       mockClimateEntity,
       mockSensorEntity,
       hassControls,
@@ -416,6 +424,7 @@ describe("ClimateDevice Integration Tests", () => {
       const edgeDevice = new ClimateDevice(
         "Integration Test Climate",
         1,
+        mockLogger,
         mockClimateEntity,
         mockSensorEntity,
         hassControls,

@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { BooleanDevice } from "../boolean_device";
 import { MockBooleanEntityWrapper } from "../../../../entities/boolean_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
+import type { ILogger } from "@digital-alchemy/core";
 
 describe("BooleanDevice", () => {
   let mockBooleanEntity: MockBooleanEntityWrapper;
   let mockSensorEntity: MockSensorEntityWrapper;
+  let mockLogger: ILogger;
   let device: BooleanDevice;
 
   beforeEach(() => {
@@ -21,9 +23,15 @@ describe("BooleanDevice", () => {
       onUpdate: vi.fn(),
     };
 
+    mockLogger = {
+      info: vi.fn(), debug: vi.fn(), warn: vi.fn(), 
+      error: vi.fn(), fatal: vi.fn(), trace: vi.fn()
+    } as ILogger;
+
     device = new BooleanDevice(
       "Test Device",
       1,
+      mockLogger,
       mockBooleanEntity,
       mockSensorEntity,
       {

@@ -11,8 +11,6 @@ import { BinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_w
 
 import { DeviceLoadManager } from "./device_load_manager";
 import { SystemStateManager } from "./system_state_manager";
-import { PICK_ENTITY } from "@digital-alchemy/hass";
-import { ByIdProxy } from "@digital-alchemy/hass";
 import { BaseHassControls } from "./devices/base_controls";
 
 export function DaytimeLoadService({
@@ -35,6 +33,7 @@ export function DaytimeLoadService({
             return new BooleanDevice(
               deviceConfig.name,
               deviceConfig.priority,
+              logger,
               booleanEntityWrapper,
               booleanConsumptionSensorWrapper,
               baseHassControls,
@@ -51,6 +50,7 @@ export function DaytimeLoadService({
             return new ClimateDevice(
               deviceConfig.name,
               deviceConfig.priority,
+              logger,
               climateEntityWrapper,
               consumptionSensorWrapper,
               climateHassControls,
@@ -68,6 +68,7 @@ export function DaytimeLoadService({
             return new DirectConsumptionDevice(
               deviceConfig.name,
               deviceConfig.priority,
+              logger,
               currentEntityWrapper,
               directConsumptionSensorWrapper,
               voltageEntityWrapper,

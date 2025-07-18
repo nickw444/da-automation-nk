@@ -69,6 +69,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     constructor(
         readonly name: string,
         readonly priority: number,
+        private readonly logger: TServiceParams['logger'],
         private readonly climateEntityRef: IClimateEntityWrapper,
         private readonly consumptionEntityRef: ISensorEntityWrapper,
         private readonly hassControls: IClimateHassControls,
@@ -101,11 +102,14 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         // If desired mode is "off", no increase increments are available
         if (desiredMode === "off") {
+            this.logger.info(`${this.name} increaseIncrements: desired mode is "off", no increments available`);
             return [];
         }
 
         // Handle device-off case (startup power calculation)
         if (this.climateEntityRef.state === "off") {
+            this.logger.info(`${this.name} increaseIncrements: device is off, calculating startup increment`);
+            
             // Calculate initial setpoint with offset in the direction of desired mode
             let initialSetpoint: number;
             if (desiredMode === "heat") {
@@ -123,6 +127,9 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             const tempDiff = Math.abs(roomTemp - initialSetpoint);
             const temperaturePower = tempDiff * this.opts.consumptionPerDegree;
             const startupPower = this.opts.compressorStartupMinConsumption + temperaturePower;
+
+            this.logger.info(`${this.name} increaseIncrements: • startup power: ${startupPower}W (base: ${this.opts.compressorStartupMinConsumption}W + temp: ${temperaturePower}W)`);
+            this.logger.info(`${this.name} increaseIncrements: • target setpoint: ${initialSetpoint}°C, mode: ${desiredMode}`);
 
             increments.push({
                 delta: startupPower,
@@ -268,6 +275,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
         // Handle device-off case - no decreases possible
         if (this.climateEntityRef.state === "off") {
+            this.logger.info(`${this.name} decreaseIncrements: device is off, no decreases possible`);
             return [];
         }
 
@@ -403,8 +411,11 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         // Clear any existing timeout
         this.clearFanOnlyTimeout();
 
+        this.logger.info(`${this.name} startFanOnlyTimeout: starting ${this.opts.fanOnlyTimeoutMs}ms timeout for auto-off`);
+
         // Start new timeout for automatic off transition
         this.fanOnlyTimeoutTimer = setTimeout(() => {
+            this.logger.info(`${this.name} startFanOnlyTimeout: fan-only timeout expired, turning off device`);
             this.climateEntityRef.turnOff();
             this.fanOnlyTimeoutTimer = null;
 
@@ -415,6 +426,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
     private clearFanOnlyTimeout(): void {
         if (this.fanOnlyTimeoutTimer) {
+            this.logger.info(`${this.name} clearFanOnlyTimeout: clearing fan-only timeout`);
             clearTimeout(this.fanOnlyTimeoutTimer);
             this.fanOnlyTimeoutTimer = null;
         }
@@ -423,9 +435,13 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     increaseConsumptionBy(increment: ClimateIncrement): void {
         DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
+        this.logger.info(`${this.name} increaseConsumptionBy: increasing by ${increment.delta}W`);
+
         // Execute encoded actions based on increment properties
         if (increment.modeChange && this.climateEntityRef.state === "off") {
             // Startup from off state: Set initial mode and setpoint
+            this.logger.info(`${this.name} increaseConsumptionBy: • startup from off - mode: ${increment.modeChange}, setpoint: ${increment.targetSetpoint}°C`);
+            
             if (increment.targetSetpoint !== undefined) {
                 this.climateEntityRef.setTemperature({
                     temperature: increment.targetSetpoint,
@@ -442,6 +458,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             );
         } else if (increment.modeChange) {
             // Mode change (e.g., fan_only to heat/cool)
+            this.logger.info(`${this.name} increaseConsumptionBy: • mode change to ${increment.modeChange}, setpoint: ${increment.targetSetpoint}°C`);
+            
             if (increment.targetSetpoint !== undefined) {
                 this.climateEntityRef.setTemperature({
                     temperature: increment.targetSetpoint,
@@ -462,6 +480,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             );
         } else if (increment.targetSetpoint !== undefined) {
             // Absolute setpoint change
+            this.logger.info(`${this.name} increaseConsumptionBy: • setpoint change to ${increment.targetSetpoint}°C`);
+            
             this.climateEntityRef.setTemperature({
                 temperature: increment.targetSetpoint,
             });
@@ -478,9 +498,13 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     decreaseConsumptionBy(increment: ClimateIncrement): void {
         DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
+        this.logger.info(`${this.name} decreaseConsumptionBy: decreasing by ${increment.delta}W`);
+
         // Execute decrease actions (setpoint adjustments, fan-only mode)
         if (increment.modeChange === "fan_only") {
             // Mode change to fan-only
+            this.logger.info(`${this.name} decreaseConsumptionBy: • mode change to fan_only`);
+            
             this.climateEntityRef.setHvacMode("fan_only");
 
             // Start fan-only timeout for automatic off transition
@@ -494,6 +518,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             );
         } else if (increment.targetSetpoint !== undefined) {
             // Absolute setpoint change
+            this.logger.info(`${this.name} decreaseConsumptionBy: • setpoint change to ${increment.targetSetpoint}°C`);
+            
             this.climateEntityRef.setTemperature({
                 temperature: increment.targetSetpoint,
             });
@@ -508,6 +534,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     }
 
     stop(): void {
+        this.logger.info(`${this.name} stop: stopping device and clearing all timers`);
+        
         // Turn off device immediately
         this.climateEntityRef.turnOff();
 
