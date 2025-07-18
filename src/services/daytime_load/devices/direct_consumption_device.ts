@@ -1,7 +1,7 @@
 import {
-    ConsumptionTransitionState,
-    ConsumptionTransitionStateMachine,
-} from "./consumption_transition_state_machine";
+    DeviceTransitionState,
+    DeviceTransitionStateMachine,
+} from "./device_transition_state_machine";
 import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
 import { INumberEntityWrapper } from "../../../entities/number_entity_wrapper";
@@ -17,7 +17,8 @@ export interface DirectConsumptionDeviceOptions {
     currentStep: number;            // Current increment steps (e.g., 0.5A, 1A)
 
     // Timing Configuration
-    debounceMs: number;             // Time between current changes
+    changeTransitionMs: number;     // Time to stay in PENDING state after on/off/change
+    debounceMs: number;             // Time between current changes (debounce period)
 
     // Stopping Configuration
     stoppingThreshold: number;      // When on, if current below this for stoppingTimeoutMs, turn off
@@ -31,11 +32,9 @@ export interface DirectConsumptionIncrement {
 }
 
 export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionIncrement, DirectConsumptionIncrement> {
-    private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
-        new ConsumptionTransitionStateMachine();
-    private unlockedTime: number = 0;
+    private readonly deviceTransitionStateMachine: DeviceTransitionStateMachine =
+        new DeviceTransitionStateMachine();
     private stoppingTimeoutTimer: NodeJS.Timeout | null = null;
-    private pendingTargetCurrent: number | undefined = undefined;
 
     constructor(
         readonly name: string,
@@ -152,7 +151,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         }
 
         // Handle device-disabled case - no decreases possible
-        if (this.enableEntityRef.state === "off") {
+        if (this.enableEntityRef.state !== "on") {
             return [];
         }
 
@@ -201,37 +200,43 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         | { type: "debounce" }
         | undefined {
 
-        // First check for pending state transitions (these take priority)
-        if (
-            this.consumptionTransitionStateMachine.state ===
-            ConsumptionTransitionState.INCREASE_PENDING
-        ) {
-            const expectedFutureConsumption = this.calculateExpectedFutureConsumption();
-            return { type: "increase", expectedFutureConsumption };
-        } else if (
-            this.consumptionTransitionStateMachine.state ===
-            ConsumptionTransitionState.DECREASE_PENDING
-        ) {
-            const expectedFutureConsumption = this.calculateExpectedFutureConsumption();
-            return { type: "decrease", expectedFutureConsumption };
+        switch (this.deviceTransitionStateMachine.state.state) {
+            case DeviceTransitionState.INCREASE_PENDING:
+                return {
+                    type: "increase",
+                    // During increase, use the maximum of the current consumption and the expected future
+                    // consumption, in the case where increase action is already occurred, but timer remains.
+                    expectedFutureConsumption: Math.max(
+                        this.deviceTransitionStateMachine.state.expectedFutureConsumption,
+                        this.currentConsumption,
+                    )
+                };
+            
+            case DeviceTransitionState.DECREASE_PENDING:
+                return {
+                    type: "decrease",
+                    // During decrease, use the minimum of the current consumption and the expected future
+                    // consumption, in the case where decrease action is already occurred, but timer remains.
+                    expectedFutureConsumption: Math.min(
+                        this.deviceTransitionStateMachine.state.expectedFutureConsumption,
+                        this.currentConsumption,
+                    )
+                };
+            
+            case DeviceTransitionState.DEBOUNCE:
+                return { type: "debounce" };
+            
+            case DeviceTransitionState.IDLE:
+            default:
+                return undefined;
         }
-
-        // Then check if we're in debounce period (only when no pending change)
-        if (Date.now() < this.unlockedTime) {
-            return { type: "debounce" };
-        }
-
-        return undefined;
     }
 
     private getCurrentVoltage(): number {
         return unwrapNumericState(this.voltageEntityRef.state) || 240; // Default 240V if unavailable
     }
 
-    private recordStateChange(): void {
-        const now = Date.now();
-        this.unlockedTime = now + this.opts.debounceMs;
-    }
+
 
     /**
      * Start monitoring for automatic stopping when current falls below threshold.
@@ -255,10 +260,7 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
                     this.enableEntityRef.turn_off();
 
                     // Reset state machine to idle after auto-stop
-                    this.consumptionTransitionStateMachine.transitionTo(
-                        ConsumptionTransitionState.IDLE,
-                    );
-                    this.pendingTargetCurrent = undefined;
+                    this.deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
                 }
 
                 this.stoppingTimeoutTimer = null;
@@ -274,11 +276,6 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
     }
 
     increaseConsumptionBy(increment: DirectConsumptionIncrement): void {
-        // Check for debounce - return silently if in debounce period
-        if (this.changeState?.type === "debounce") {
-            return;
-        }
-
         DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
         // Execute encoded actions based on increment properties
@@ -297,33 +294,39 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
             // Clear stopping timeout when enabling
             this.clearStoppingTimeout();
 
-            this.pendingTargetCurrent = increment.targetCurrent;
-            this.recordStateChange();
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.INCREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.INCREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.changeTransitionMs,
+                this.opts.debounceMs
             );
         } else if (increment.targetCurrent !== undefined) {
+            if (this.enableEntityRef.state !== "on") {
+                return;
+            }
+            
             // Adjust current level
             this.currentEntityRef.setValue(increment.targetCurrent);
 
             // Restart stopping threshold monitoring
             this.startStoppingThresholdMonitoring();
 
-            this.pendingTargetCurrent = increment.targetCurrent;
-            this.recordStateChange();
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.INCREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.INCREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.changeTransitionMs,
+                this.opts.debounceMs
             );
         }
     }
 
     decreaseConsumptionBy(increment: DirectConsumptionIncrement): void {
-        // Check for debounce - return silently if in debounce period
-        if (this.changeState?.type === "debounce") {
+        DeviceHelper.validateDecreaseConsumptionBy(this, increment);
+
+        // Only allow decrease operations when device is enabled
+        if (this.enableEntityRef.state !== "on") {
             return;
         }
-
-        DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
         // Execute decrease actions (only targetCurrent adjustments)
         if (increment.targetCurrent !== undefined) {
@@ -333,10 +336,11 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
             // Restart stopping threshold monitoring
             this.startStoppingThresholdMonitoring();
 
-            this.pendingTargetCurrent = increment.targetCurrent;
-            this.recordStateChange();
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.DECREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.DECREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.changeTransitionMs,
+                this.opts.debounceMs
             );
         }
     }
@@ -352,21 +356,6 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         this.clearStoppingTimeout();
 
         // Reset state machine to idle
-        this.consumptionTransitionStateMachine.transitionTo(
-            ConsumptionTransitionState.IDLE,
-        );
-
-        // Reset debounce state
-        this.unlockedTime = 0;
-        this.pendingTargetCurrent = undefined;
-    }
-
-    private calculateExpectedFutureConsumption(): number {
-        if (this.pendingTargetCurrent === undefined) {
-            return 0;
-        }
-
-        const voltage = unwrapNumericState(this.voltageEntityRef.state) || 240; // Default voltage
-        return this.pendingTargetCurrent * voltage;
+        this.deviceTransitionStateMachine.reset();
     }
 }

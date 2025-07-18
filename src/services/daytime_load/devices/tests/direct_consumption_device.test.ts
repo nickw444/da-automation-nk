@@ -47,6 +47,7 @@ describe("DirectConsumptionDevice", () => {
             startingMinCurrent: 4.0,        // 4A minimum to start
             maxCurrent: 16.0,               // 16A maximum
             currentStep: 1.0,               // 1A steps
+            changeTransitionMs: 30000,      // 30 seconds for consumption to stabilize after on/off
             debounceMs: 30000,              // 30 second debounce
             stoppingThreshold: 2.0,         // Stop below 2A
             stoppingTimeoutMs: 60000,       // 1 minute timeout
@@ -522,6 +523,7 @@ describe("DirectConsumptionDevice", () => {
         it("should return decrease pending after decreaseConsumptionBy", () => {
             mockEnableEntity.state = "on";
             mockCurrentEntity.state = 5.0;
+            mockConsumptionEntity.state = 1200; // 5A * 240V = 1200W
 
             device.decreaseConsumptionBy({
                 delta: -120,
@@ -615,7 +617,8 @@ describe("DirectConsumptionDevice", () => {
                 expect(mockCurrentEntity.setValue).toHaveBeenCalledTimes(1);
             });
 
-            it("should prevent actions during debounce period", () => {
+            it("should throw error when actions attempted during debounce period", () => {
+                vi.useFakeTimers();
                 const mockDateNow = vi.spyOn(Date, 'now');
                 let currentTime = 1000000000; // Fixed starting time
                 mockDateNow.mockImplementation(() => currentTime);
@@ -651,13 +654,8 @@ describe("DirectConsumptionDevice", () => {
                     // correctly pointed out that direct state manipulation shouldn't be "complex",
                     // we'll use minimal internal access with clear documentation.
 
-                    // Manually transition state machine to simulate completion
-                    // This simulates what would happen when entity reaches target state
-                    const stateMachine = (testDevice as any).consumptionTransitionStateMachine;
-                    stateMachine.transitionTo("idle");
-
-                    // Advance time but stay within debounce period
-                    currentTime += 5000; // 5 seconds later (< 30 second debounce)
+                    // Advance time to transition from PENDING to DEBOUNCE
+                    vi.advanceTimersByTime(config.changeTransitionMs);
 
                     // Should now be in debounce state
                     expect(testDevice.changeState?.type).toBe("debounce");
@@ -665,11 +663,13 @@ describe("DirectConsumptionDevice", () => {
                     // Clear mocks to test debounce behavior
                     vi.mocked(mockCurrentEntity.setValue).mockClear();
 
-                    // Attempt action during debounce - should be silently ignored
-                    testDevice.increaseConsumptionBy({
-                        delta: 480,
-                        targetCurrent: 4.0,
-                    });
+                    // Attempt action during debounce - should throw error
+                    expect(() => {
+                        testDevice.increaseConsumptionBy({
+                            delta: 480,
+                            targetCurrent: 4.0,
+                        });
+                    }).toThrow("Cannot increase consumption for Test Debounce Device: device is in debounce period");
 
                     // No entity methods should have been called during debounce
                     expect(mockCurrentEntity.setValue).not.toHaveBeenCalled();
@@ -678,7 +678,7 @@ describe("DirectConsumptionDevice", () => {
                     expect(testDevice.changeState?.type).toBe("debounce");
 
                     // Advance past debounce period
-                    currentTime += 30000; // Past debounce period
+                    vi.advanceTimersByTime(config.debounceMs);
 
                     // Should no longer be in debounce
                     expect(testDevice.changeState).toBeUndefined();

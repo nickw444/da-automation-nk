@@ -42,8 +42,11 @@ describe("ClimateDevice", () => {
       maxCompressorConsumption: 2500, // 2.5kW maximum consumption at full duty
       fanOnlyMinConsumption: 150,     // 150W fan-only mode
       heatCoolMinConsumption: 700,    // 700W minimum heating/cooling mode
+      setpointChangeTransitionMs: 60000,
       setpointDebounceMs: 120000,
+      modeChangeTransitionMs: 120000,
       modeDebounceMs: 300000,
+      startupTransitionMs: 120000,
       startupDebounceMs: 300000,
       fanOnlyTimeoutMs: 1800000,
     };
@@ -590,7 +593,7 @@ describe("ClimateDevice", () => {
         // Check that changeState indicates increase pending
         expect(device.changeState).toEqual({
           type: "increase",
-          expectedFutureConsumption: 0
+          expectedFutureConsumption: 350
         });
       });
 
@@ -643,11 +646,10 @@ describe("ClimateDevice", () => {
         });
       });
 
-
-
       it("should record appropriate state change and set pending state", () => {
         mockClimateEntity.state = "cool";
         mockClimateEntity.attributes.temperature = 22;
+        mockSensorEntity.state = 700;
         const increment = {
           delta: -350,
           targetSetpoint: 23,
@@ -658,7 +660,7 @@ describe("ClimateDevice", () => {
         // Check that changeState indicates decrease pending
         expect(device.changeState).toEqual({
           type: "decrease",
-          expectedFutureConsumption: 0
+          expectedFutureConsumption: 350
         });
       });
 

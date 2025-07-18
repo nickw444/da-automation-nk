@@ -1,13 +1,12 @@
 import {
-    ConsumptionTransitionState,
-    ConsumptionTransitionStateMachine,
-} from "./consumption_transition_state_machine";
+    DeviceTransitionState,
+    DeviceTransitionStateMachine,
+} from "./device_transition_state_machine";
 import { unwrapNumericState } from "../states_helpers";
 import { DeviceHelper, IBaseDevice } from "./base_device";
 import { IClimateEntityWrapper } from "../../../entities/climate_entity_wrapper";
 import { ISensorEntityWrapper } from "../../../entities/sensor_entity_wrapper";
 import { TServiceParams } from "@digital-alchemy/core";
-import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
 import { toSnakeCase } from "../../../base/snake_case";
 import { BaseHassControls, IBaseHassControls } from "./base_controls";
 
@@ -27,10 +26,13 @@ export interface ClimateDeviceOptions {
     heatCoolMinConsumption: number;
 
     // Timing Configuration
-    setpointDebounceMs: number;     // 2-5 minutes (120000-300000ms) between setpoint changes
-    modeDebounceMs: number;         // 5-10 minutes (300000-600000ms) between mode changes
-    startupDebounceMs: number;      // 5-10 minutes (300000-600000ms) for startup from off
-    fanOnlyTimeoutMs: number;       // 30-60 minutes (1800000-3600000ms) before auto-off from fan-only
+    setpointChangeTransitionMs: number;  // Time to stay in PENDING state after setpoint change (e.g. 30-60 seconds for consumption to stabilize)
+    setpointDebounceMs: number;          // Time to wait before new changes allowed after setpoint change (e.g. 2-5 minutes)
+    modeChangeTransitionMs: number;      // Time to stay in PENDING state after mode change (e.g. 60-120 seconds for consumption to stabilize)
+    modeDebounceMs: number;              // Time to wait before new changes allowed after mode change (e.g. 5-10 minutes)
+    startupTransitionMs: number;         // Time to stay in PENDING state after startup (e.g. 60-120 seconds for consumption to stabilize)
+    startupDebounceMs: number;           // Time to wait before new changes allowed after startup (e.g. 5-10 minutes)
+    fanOnlyTimeoutMs: number;            // Time before auto-off from fan-only mode (e.g. 30-60 minutes)
 }
 
 // User control interface for ClimateDevice
@@ -61,11 +63,9 @@ export interface ClimateIncrement {
 }
 
 export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncrement> {
-    private readonly consumptionTransitionStateMachine: ConsumptionTransitionStateMachine =
-        new ConsumptionTransitionStateMachine();
-    private unlockedTime: number = 0;
+    private readonly deviceTransitionStateMachine: DeviceTransitionStateMachine = new DeviceTransitionStateMachine();
     private fanOnlyTimeoutTimer: NodeJS.Timeout | null = null;
-
+    
     constructor(
         readonly name: string,
         readonly priority: number,
@@ -358,51 +358,39 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         | { type: "debounce" }
         | undefined {
 
-        // First check for pending state transitions (these take priority)
-        if (
-            this.consumptionTransitionStateMachine.state ===
-            ConsumptionTransitionState.INCREASE_PENDING
-        ) {
-            return { type: "increase", expectedFutureConsumption: 0 }; // Will be calculated properly in Phase 3
-        } else if (
-            this.consumptionTransitionStateMachine.state ===
-            ConsumptionTransitionState.DECREASE_PENDING
-        ) {
-            return { type: "decrease", expectedFutureConsumption: 0 }; // Will be calculated properly in Phase 4
-        }
-
-        // Then check if we're in debounce period (only when no pending change)
-        if (Date.now() < this.unlockedTime) {
-            return { type: "debounce" };
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Record state change and set appropriate debounce period.
-     * 
-     * Different operation types have different debounce periods:
-     * - Setpoint changes: 2+ minutes (allow HVAC system to respond)
-     * - Mode changes: 5+ minutes (compressor/heat pump cycling)
-     * - Startup: 5+ minutes (system ramp-up time)
-     */
-    private recordStateChange(operationType: "setpoint" | "mode" | "startup"): void {
-        const now = Date.now();
-
-        // Set appropriate debounce period based on operation type
-        switch (operationType) {
-            case "setpoint":
-                this.unlockedTime = now + this.opts.setpointDebounceMs;
-                break;
-            case "mode":
-                this.unlockedTime = now + this.opts.modeDebounceMs;
-                break;
-            case "startup":
-                this.unlockedTime = now + this.opts.startupDebounceMs;
-                break;
+        switch (this.deviceTransitionStateMachine.state.state) {
+            case DeviceTransitionState.INCREASE_PENDING:
+                return {
+                    type: "increase",
+                    // During increase, use the maximum of the current consumption and the expected future
+                    // consumption, in the case where increase action is already occurred, but timer remains.
+                    expectedFutureConsumption: Math.max(
+                        this.deviceTransitionStateMachine.state.expectedFutureConsumption,
+                        this.currentConsumption,
+                    )
+                };
+            
+            case DeviceTransitionState.DECREASE_PENDING:
+                return {
+                    type: "decrease",
+                    // During decrease, use the minimum of the current consumption and the expected future
+                    // consumption, in the case where decrease action is already occurred, but timer remains.
+                    expectedFutureConsumption: Math.min(
+                        this.deviceTransitionStateMachine.state.expectedFutureConsumption,
+                        this.currentConsumption,
+                    )
+                };
+            
+            case DeviceTransitionState.DEBOUNCE:
+                return { type: "debounce" };
+            
+            case DeviceTransitionState.IDLE:
+            default:
+                return undefined;
         }
     }
+
+
 
     /**
      * Start timeout for automatic device shutdown from fan-only mode.
@@ -421,9 +409,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             this.fanOnlyTimeoutTimer = null;
 
             // Reset state machine to idle after auto-off
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.IDLE,
-            );
+            this.deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
         }, this.opts.fanOnlyTimeoutMs);
     }
 
@@ -435,11 +421,6 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
     }
 
     increaseConsumptionBy(increment: ClimateIncrement): void {
-        // Check for debounce - return silently if in debounce period
-        if (this.changeState?.type === "debounce") {
-            return;
-        }
-
         DeviceHelper.validateIncreaseConsumptionBy(this, increment);
 
         // Execute encoded actions based on increment properties
@@ -453,9 +434,11 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             } else {
                 this.climateEntityRef.setHvacMode(increment.modeChange);
             }
-            this.recordStateChange("startup");
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.INCREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.INCREASE_PENDING,
+                increment.delta, // In theory current consumption should be 0, so this is the same as the delta
+                this.opts.startupTransitionMs,
+                this.opts.startupDebounceMs
             );
         } else if (increment.modeChange) {
             // Mode change (e.g., fan_only to heat/cool)
@@ -471,28 +454,28 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             // Clear fan-only timeout when transitioning away from fan-only mode
             this.clearFanOnlyTimeout();
 
-            this.recordStateChange("mode");
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.INCREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.INCREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.modeChangeTransitionMs,
+                this.opts.modeDebounceMs
             );
         } else if (increment.targetSetpoint !== undefined) {
             // Absolute setpoint change
             this.climateEntityRef.setTemperature({
                 temperature: increment.targetSetpoint,
             });
-            this.recordStateChange("setpoint");
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.INCREASE_PENDING,
+
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.INCREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.setpointChangeTransitionMs,
+                this.opts.setpointDebounceMs
             );
         }
     }
 
     decreaseConsumptionBy(increment: ClimateIncrement): void {
-        // Check for debounce - return silently if in debounce period
-        if (this.changeState?.type === "debounce") {
-            return;
-        }
-
         DeviceHelper.validateDecreaseConsumptionBy(this, increment);
 
         // Execute decrease actions (setpoint adjustments, fan-only mode)
@@ -503,18 +486,23 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             // Start fan-only timeout for automatic off transition
             this.startFanOnlyTimeout();
 
-            this.recordStateChange("mode");
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.DECREASE_PENDING,
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.DECREASE_PENDING,
+                this.currentConsumption + increment.delta,
+                this.opts.modeChangeTransitionMs,
+                this.opts.modeDebounceMs
             );
         } else if (increment.targetSetpoint !== undefined) {
             // Absolute setpoint change
             this.climateEntityRef.setTemperature({
                 temperature: increment.targetSetpoint,
             });
-            this.recordStateChange("setpoint");
-            this.consumptionTransitionStateMachine.transitionTo(
-                ConsumptionTransitionState.DECREASE_PENDING,
+
+            this.deviceTransitionStateMachine.transitionToPending(
+                DeviceTransitionState.DECREASE_PENDING,
+                this.currentConsumption+ increment.delta,
+                this.opts.setpointChangeTransitionMs,
+                this.opts.setpointDebounceMs
             );
         }
     }
@@ -527,12 +515,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         this.clearFanOnlyTimeout();
 
         // Reset state machine to idle
-        this.consumptionTransitionStateMachine.transitionTo(
-            ConsumptionTransitionState.IDLE,
-        );
-
-        // Reset debounce state
-        this.unlockedTime = 0;
+        this.deviceTransitionStateMachine.reset();
     }
 }
 

@@ -31,8 +31,9 @@ describe("BooleanDevice", () => {
       },
       {
         expectedConsumption: 50,
-        offToOnDebounceMs: 30000,
-        onToOffDebounceMs: 10000,
+        changeTransitionMs: 1000,
+        turnOffDebounce: 30000,
+        turnOnDebounce: 10000,
       },
     );
   });
@@ -144,10 +145,13 @@ describe("BooleanDevice", () => {
       device.increaseConsumptionBy({ delta: 50, action: "turn_on" });
       expect(device.changeState?.type).toBe("increase");
       
+      // After changeTransitionMs, should move to debounce
       vi.advanceTimersByTime(1000);
-      
-      // After timeout, state machine should be back to IDLE but still in debounce
       expect(device.changeState?.type).toBe("debounce");
+      
+      // After debounce period, should be back to IDLE
+      vi.advanceTimersByTime(10000);
+      expect(device.changeState).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }
@@ -163,19 +167,21 @@ describe("BooleanDevice", () => {
       device.increaseConsumptionBy({ delta: 50, action: "turn_on" });
       expect(mockBooleanEntity.turn_on).toHaveBeenCalledTimes(1);
       
-      // Wait for state machine to settle
+      // Wait for transition to debounce
       vi.advanceTimersByTime(1000);
       
       // Should now be in debounce period
       expect(device.changeState?.type).toBe("debounce");
       
-      // Try to turn off during debounce - should be ignored
+      // Try to turn off during debounce - the state machine should reject this
       mockBooleanEntity.state = "on";
-      device.decreaseConsumptionBy({ delta: -50, action: "turn_off" });
+      vi.clearAllMocks();
+      expect(() => device.decreaseConsumptionBy({ delta: -50, action: "turn_off" }))
+        .toThrow("Cannot decrease consumption for Test Device: device is in debounce period");
       expect(mockBooleanEntity.turn_off).not.toHaveBeenCalled();
       
       // After debounce period ends, actions should work again
-      vi.advanceTimersByTime(10000); // onToOffDebounceMs
+      vi.advanceTimersByTime(10000); // turnOnDebounce
       expect(device.changeState).toBeUndefined();
       
       device.decreaseConsumptionBy({ delta: -50, action: "turn_off" });
@@ -189,7 +195,7 @@ describe("BooleanDevice", () => {
     device.stop();
     
     expect(mockBooleanEntity.turn_off).toHaveBeenCalledTimes(1);
-    // After stopping, device should be in debounce state due to recordStateChange
-    expect(device.changeState?.type).toBe("debounce");
+    // After stopping, device should be back to IDLE state due to state machine reset
+    expect(device.changeState).toBeUndefined();
   });
 });

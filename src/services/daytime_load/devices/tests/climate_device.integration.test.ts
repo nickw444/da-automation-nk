@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ClimateDevice, ClimateDeviceOptions, IClimateHassControls } from "../climate_device";
 import { MockClimateEntityWrapper } from "../../../../entities/climate_entity_wrapper";
 import { MockSensorEntityWrapper } from "../../../../entities/sensor_entity_wrapper";
-import { ConsumptionTransitionState } from "../consumption_transition_state_machine";
+import { DeviceTransitionState } from "../device_transition_state_machine";
 
 describe("ClimateDevice Integration Tests", () => {
   let mockClimateEntity: MockClimateEntityWrapper;
@@ -45,10 +45,13 @@ describe("ClimateDevice Integration Tests", () => {
       maxCompressorConsumption: 2500,
       fanOnlyMinConsumption: 150,
       heatCoolMinConsumption: 700,
-      setpointDebounceMs: 120000, // 2 minutes
-      modeDebounceMs: 300000,     // 5 minutes
-      startupDebounceMs: 300000,  // 5 minutes
-      fanOnlyTimeoutMs: 1800000,  // 30 minutes
+      setpointChangeTransitionMs: 60000,  // 1 minute
+      setpointDebounceMs: 120000,          // 2 minutes
+      modeChangeTransitionMs: 120000,      // 2 minutes
+      modeDebounceMs: 300000,              // 5 minutes
+      startupTransitionMs: 120000,         // 2 minutes
+      startupDebounceMs: 300000,           // 5 minutes
+      fanOnlyTimeoutMs: 1800000,           // 30 minutes
     };
 
     hassControls = {
@@ -102,7 +105,7 @@ describe("ClimateDevice Integration Tests", () => {
       // Device should be in pending increase state
       expect(device.changeState).toEqual({
         type: "increase",
-        expectedFutureConsumption: 0
+        expectedFutureConsumption: 1300
       });
 
       // Step 2: Simulate device startup completion
@@ -112,7 +115,7 @@ describe("ClimateDevice Integration Tests", () => {
 
       // Wait for full startup debounce period and clear pending state
       vi.advanceTimersByTime(config.startupDebounceMs); // Full startup debounce
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Step 3: Get more aggressive increments to move toward desired (20°C)
       const aggressiveIncrements = device.increaseIncrements;
@@ -135,7 +138,7 @@ describe("ClimateDevice Integration Tests", () => {
 
       // Wait for setpoint debounce to complete
       vi.advanceTimersByTime(config.setpointDebounceMs);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Step 5: Device should offer decreases (move setpoint toward comfort limit)
       const decreaseIncrements = device.decreaseIncrements;
@@ -182,7 +185,7 @@ describe("ClimateDevice Integration Tests", () => {
       mockSensorEntity.state = 1300;
 
       vi.advanceTimersByTime(60000);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Step 3: Increase toward desired
       const increaseIncrements = device.increaseIncrements;
@@ -196,7 +199,7 @@ describe("ClimateDevice Integration Tests", () => {
       mockClimateEntity.attributes.temperature = 21;
 
       vi.advanceTimersByTime(60000);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Should still offer more aggressive heating (comfort doesn't limit increases)
       const moreIncreases = device.increaseIncrements;
@@ -241,7 +244,7 @@ describe("ClimateDevice Integration Tests", () => {
 
       // Clear the pending state after some time
       vi.advanceTimersByTime(60000);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Clear any previous turnOff calls from other setup
       vi.mocked(mockClimateEntity.turnOff).mockClear();
@@ -315,7 +318,7 @@ describe("ClimateDevice Integration Tests", () => {
 
       // Wait for full setpoint debounce period
       vi.advanceTimersByTime(config.setpointDebounceMs);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       // Step 4: Now should be able to make additional adjustments
       expect(device.changeState).toBeUndefined();
@@ -340,16 +343,17 @@ describe("ClimateDevice Integration Tests", () => {
 
       device.increaseConsumptionBy(increase);
 
-      // Step 2: Clear pending state but stay within debounce period
-      vi.advanceTimersByTime(60000); // 1 minute
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      // Step 2: Wait for the transition to move from PENDING to DEBOUNCE naturally
+      vi.advanceTimersByTime(config.setpointChangeTransitionMs); // Wait for transition from PENDING to DEBOUNCE
 
       // Should still be in debounce period (setpoint debounce is 2 minutes)
       expect(device.changeState?.type).toBe("debounce");
 
-      // Attempt to make another change should return silently
+      // Attempt to make another change should throw an error
       const anotherIncrease = increaseIncrements[1];
-      device.increaseConsumptionBy(anotherIncrease); // Should return silently
+      expect(() => {
+        device.increaseConsumptionBy(anotherIncrease);
+      }).toThrow("Cannot increase consumption for Integration Test Climate: device is in debounce period");
 
       // No additional setTemperature calls should be made
       expect(mockClimateEntity.setTemperature).toHaveBeenCalledTimes(1);
@@ -435,7 +439,7 @@ describe("ClimateDevice Integration Tests", () => {
 
       // Wait for setpoint debounce to complete, then transition to fan-only
       vi.advanceTimersByTime(config.setpointDebounceMs);
-      (device as any).consumptionTransitionStateMachine.transitionTo(ConsumptionTransitionState.IDLE);
+      (device as any).deviceTransitionStateMachine.transitionToState({ state: DeviceTransitionState.IDLE });
 
       const fanOnlyIncrement = { delta: -1250, modeChange: "fan_only" as const };
       hassControls.enableComfortSetpoint = false; // Allow fan-only

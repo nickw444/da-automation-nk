@@ -99,10 +99,13 @@ const devices: DeviceConfig[] = [
       heatCoolMinConsumption: 500,
 
       // Timing Configuration
-      setpointDebounceMs: 2 * 60_000,     // 2 minutes
-      modeDebounceMs: 5 * 60_000,        // 5 minutes
-      startupDebounceMs: 10 * 60_000,     // 10 minutes
-      fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
+      setpointChangeTransitionMs: 60_000,  // 1 minute for consumption to stabilize after setpoint change
+      setpointDebounceMs: 1 * 60_000,      // additional 1 minutes before subsequent changes
+      modeChangeTransitionMs: 3 * 60_000,  // 3 minutes for consumption to stabilize after mode change
+      modeDebounceMs: 2 * 60_000,          // additional 2 minutes before subsequent changes
+      startupTransitionMs: 5 * 60_000,     // 5 minutes for consumption to stabilize after startup
+      startupDebounceMs: 5 * 60_000,       // additional 5 minutes before subsequent changes
+      fanOnlyTimeoutMs: 30 * 60_000,       // 30 minutes before auto-off from fan-only
     }
   },
   {
@@ -113,8 +116,9 @@ const devices: DeviceConfig[] = [
     name: "Germination Shelf",
     opts: {
       expectedConsumption: 80,
-      offToOnDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF (wait) ON
-      onToOffDebounceMs: 1 * 60_000, // 1 minute from OFF to ON (wait) OFF
+      changeTransitionMs: 5000, // 5 seconds for consumption to stabilize after on/off
+      turnOffDebounce: 5 * 60_000, // 5 minutes debounce after turning off
+      turnOnDebounce: 1 * 60_000, // 1 minute debounce after turning on
     },
   },
   {
@@ -125,8 +129,9 @@ const devices: DeviceConfig[] = [
     name: "Towel Rail",
     opts: {
       expectedConsumption: 80,
-      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-      onToOffDebounceMs: 5 * 60_000, // 5 minutes from ON to OFF
+      changeTransitionMs: 10_000, // 10 seconds for consumption to stabilize after on/off
+      turnOffDebounce: 15 * 60_000, // 15 minutes debounce after turning off
+      turnOnDebounce: 5 * 60_000, // 5 minutes debounce after turning on
     },
   },
   {
@@ -137,8 +142,9 @@ const devices: DeviceConfig[] = [
     name: "Subfloor Fan",
     opts: {
       expectedConsumption: 50,
-      offToOnDebounceMs: 15 * 60_000, // 15 minutes from OFF to ON
-      onToOffDebounceMs: 10 * 60_000, // 10 minutes from ON to OFF
+      changeTransitionMs: 10_000, // 10 seconds for consumption to stabilize after on/off
+      turnOffDebounce: 15 * 60_000, // 15 minutes debounce after turning off
+      turnOnDebounce: 5 * 60_000, // 5 minutes debounce after turning on
     },
   },
   {
@@ -154,7 +160,8 @@ const devices: DeviceConfig[] = [
       startingMinCurrent: 5,
       maxCurrent: 20,
       currentStep: 1,
-      debounceMs: 10 * 60_000,
+      changeTransitionMs: 30_000, // 30 seconds for consumption to stabilize after on/off
+      debounceMs: 30_000, // additional 30 seconds debounce before further changes
       // <= 3A for > 10 minutes
       stoppingThreshold: 3,
       stoppingTimeoutMs: 10 * 60_000,

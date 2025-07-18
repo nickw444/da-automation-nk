@@ -12,8 +12,8 @@ export interface IBaseDevice<T extends {delta: number}, U extends {delta: number
 
   get currentConsumption(): number;
   get changeState():
-    | { type: "increase" | "decrease", expectedFutureConsumption: number }
-    | { type: "debounce" }
+    | { type: "increase" | "decrease", expectedFutureConsumption: number }  // A short period until the new consumption takes effect, defined on a per-device level.
+    | { type: "debounce" } // A period until the device can be interacted with again.
     | undefined;
 
   /**
@@ -40,7 +40,7 @@ export interface IBaseDevice<T extends {delta: number}, U extends {delta: number
 export class DeviceHelper {
   /**
    * Validates that a device can increase consumption by the specified increment.
-   * Throws an error if validation fails, returns silently if in debounce period.
+   * Throws an error if validation fails.
    */
   static validateIncreaseConsumptionBy<T extends {delta: number}, U extends {delta: number}>(
     device: IBaseDevice<T, U>, 
@@ -48,6 +48,11 @@ export class DeviceHelper {
   ): void {
     // Assume increment is valid since caller should pass objects directly from device.increaseIncrements
     const currentChangeState = device.changeState;
+    if (currentChangeState?.type === "debounce") {
+      throw new Error(
+        `Cannot increase consumption for ${device.name}: device is in debounce period`
+      );
+    }
     if (currentChangeState?.type === "increase" || currentChangeState?.type === "decrease") {
       throw new Error(
         `Cannot increase consumption for ${device.name}: change already pending`
@@ -57,7 +62,7 @@ export class DeviceHelper {
 
   /**
    * Validates that a device can decrease consumption by the specified increment.
-   * Throws an error if validation fails, returns silently if in debounce period.
+   * Throws an error if validation fails.
    */
   static validateDecreaseConsumptionBy<T extends {delta: number}, U extends {delta: number}>(
     device: IBaseDevice<T, U>, 
@@ -65,6 +70,11 @@ export class DeviceHelper {
   ): void {
     // Assume increment is valid since caller should pass objects directly from device.decreaseIncrements
     const currentChangeState = device.changeState;
+    if (currentChangeState?.type === "debounce") {
+      throw new Error(
+        `Cannot decrease consumption for ${device.name}: device is in debounce period`
+      );
+    }
     if (currentChangeState?.type === "increase" || currentChangeState?.type === "decrease") {
       throw new Error(
         `Cannot decrease consumption for ${device.name}: change already pending`
