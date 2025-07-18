@@ -11,7 +11,7 @@ export class BaseHassControls implements IBaseHassControls {
     readonly subDevice: ReturnType<TServiceParams["synapse"]["device"]["register"]>
     
     // This is crude.
-    private readonly enableSystemSwitch: { is_on: boolean };
+    private readonly managementEnabledSwitch: { is_on: boolean };
 
     constructor(
         name: string,
@@ -23,7 +23,7 @@ export class BaseHassControls implements IBaseHassControls {
             name: "Daytime Load " + name,
         });
     
-        const enableSystemSwitch = synapse.switch({
+        const managementEnabledSwitch = synapse.switch({
             context,
             device_id: this.subDevice,
             name: "Management Enabled",
@@ -31,16 +31,16 @@ export class BaseHassControls implements IBaseHassControls {
             suggested_object_id: "daytime_load_" + toSnakeCase(name) + "_management_enabled",
             icon: "mdi:cog",
         });
-        enableSystemSwitch.onUpdate((newState) => {
+        managementEnabledSwitch.onUpdate((newState) => {
             if (newState.state === 'unknown') {
                 logger.warn("Daytime Load " + name + " Management Enabled is unknown/initial, setting to true");
-                enableSystemSwitch.is_on = true;
+                managementEnabledSwitch.is_on = true;
             }
         });
-        
+        this.managementEnabledSwitch = managementEnabledSwitch;
     }
 
     get managementEnabled(): boolean {
-        return this.enableSystemSwitch.is_on;
+        return this.managementEnabledSwitch.is_on;
     }
 }

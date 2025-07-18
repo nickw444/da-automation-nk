@@ -66,6 +66,10 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         const currentVoltage = this.getCurrentVoltage();
         const currentCurrent = this.currentEntityRef.state;
 
+        if (!this.baseControls.managementEnabled) {
+            return [];
+        }
+
         // Handle device-disabled case (startup)
         if (this.enableEntityRef.state === "off") {
             // Check if device is allowed to be enabled
@@ -142,6 +146,10 @@ export class DirectConsumptionDevice implements IBaseDevice<DirectConsumptionInc
         const increments: DirectConsumptionIncrement[] = [];
         const currentVoltage = this.getCurrentVoltage();
         const actualConsumption = this.currentConsumption;
+
+        if (!this.baseControls.managementEnabled) {
+            return [];
+        }
 
         // Handle device-disabled case - no decreases possible
         if (this.enableEntityRef.state === "off") {

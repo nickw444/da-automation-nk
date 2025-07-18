@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DeviceLoadManager } from "../device_load_manager";
+import { DeviceLoadManager, LOOP_INTERVAL } from "../device_load_manager";
 import { IBaseDevice } from "../devices/base_device";
 import type { ILogger } from "@digital-alchemy/core";
 import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
@@ -96,7 +96,7 @@ describe("DeviceLoadManager", () => {
 
     // Start the load manager and trigger one loop iteration
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should shed 400W (900 - 500 desired)
     // Device2 has -80W decrement, Device3 has -150W decrement
@@ -111,7 +111,7 @@ describe("DeviceLoadManager", () => {
     mockGridSensorMean.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
 
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should shed Device3 (-150W) and Device2 (-80W) for total of 230W
     expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
@@ -145,7 +145,7 @@ describe("DeviceLoadManager", () => {
     );
 
     testDeviceManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // No devices should be called since their decrements are too large
     expect(deviceWithLargeDecrement1.decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -156,7 +156,7 @@ describe("DeviceLoadManager", () => {
     mockGridSensorMean.state = 900;
 
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should shed load from both devices
     expect(mockDevices[2].decreaseConsumptionBy).toHaveBeenCalledWith({ delta: -150 });
@@ -174,7 +174,7 @@ describe("DeviceLoadManager", () => {
     mockDevices[2] = deviceWithPendingChanges;
 
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should skip Device3 and only use Device2
     expect(mockDevices[2].decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -192,7 +192,7 @@ describe("DeviceLoadManager", () => {
     mockDevices[1] = deviceInDebounce;
 
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should skip Device2 and only use Device3
     expect(mockDevices[1].decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -212,7 +212,7 @@ describe("DeviceLoadManager", () => {
     mockDevices[2] = deviceWithManagementDisabled;
 
     deviceLoadManager.start();
-    vi.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // Should skip Device3 (management disabled) and only use Device2
     expect(mockDevices[2].decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -269,7 +269,7 @@ describe("DeviceLoadManager", () => {
       mockGridSensorMean.state = 100; // Below min of 200W
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Should add 400W (500 desired - 100 current)
       // Device1 has higher priority (1), should be called first
@@ -281,7 +281,7 @@ describe("DeviceLoadManager", () => {
       mockGridSensorMean.state = 150; // Below min of 200W, need 350W (500 - 150)
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Device1 (priority 1) should be called first, Device2 (priority 2) second
       expect(mockDevices[0].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 100 });
@@ -299,7 +299,7 @@ describe("DeviceLoadManager", () => {
       mockDevices[0] = deviceWithPending;
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Device1 has pending increase (100W), so remaining capacity is 300W
       // Device1 should be skipped, Device2 should get 80W
@@ -318,7 +318,7 @@ describe("DeviceLoadManager", () => {
       mockDevices[0] = deviceWithPendingDecrease;
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Device1 should be skipped, only Device2 should be called
       expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
@@ -346,7 +346,7 @@ describe("DeviceLoadManager", () => {
       );
 
       testDeviceManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Should choose the largest increment (100W) first, then Device2 gets 80W
       expect(deviceWithMultipleIncrements.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 100 });
@@ -428,7 +428,7 @@ describe("DeviceLoadManager", () => {
       );
 
       testDeviceManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Air Conditioner should not be called - no suitable increment for 350W
       expect(testDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
@@ -456,7 +456,7 @@ describe("DeviceLoadManager", () => {
       mockDevices[0] = deviceWithManagementDisabled;
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Should skip Device1 (management disabled) and only use Device2
       expect(mockDevices[0].increaseConsumptionBy).not.toHaveBeenCalled();
@@ -503,7 +503,7 @@ describe("DeviceLoadManager", () => {
       );
 
       testDeviceManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Device1 should be skipped (management disabled)
       expect(deviceWithManagementDisabled.increaseConsumptionBy).not.toHaveBeenCalled();
@@ -523,7 +523,7 @@ describe("DeviceLoadManager", () => {
       mockGridSensorMean.state = 500; // Exactly at desired, within range
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // No devices should be called
       expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -540,7 +540,7 @@ describe("DeviceLoadManager", () => {
       mockGridSensorMean.state = null;
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Should not call any devices when grid consumption is null
       expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
@@ -551,7 +551,7 @@ describe("DeviceLoadManager", () => {
       mockGridSensorMean.state = "unavailable";
 
       deviceLoadManager.start();
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(LOOP_INTERVAL);
 
       // Should not call any devices when grid consumption is unavailable
       expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();

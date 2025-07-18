@@ -91,16 +91,16 @@ const devices: DeviceConfig[] = [
       setpointStep: 1.0,
 
       // Power Configuration
-      compressorStartupMinConsumption: 500,
+      compressorStartupMinConsumption: 800,
       powerOnSetpointOffset: 2.0,
       consumptionPerDegree: 300,
       maxCompressorConsumption: 2400,
       fanOnlyMinConsumption: 200,
-      heatCoolMinConsumption: 300,
+      heatCoolMinConsumption: 500,
 
       // Timing Configuration
-      setpointDebounceMs: 5 * 60_000,     // 5 minutes
-      modeDebounceMs: 10 * 60_000,        // 10 minutes
+      setpointDebounceMs: 2 * 60_000,     // 2 minutes
+      modeDebounceMs: 5 * 60_000,        // 5 minutes
       startupDebounceMs: 10 * 60_000,     // 10 minutes
       fanOnlyTimeoutMs: 30 * 60_000,      // 30 minutes
     }
@@ -173,10 +173,10 @@ export const config: Config = {
     mean1min: "sensor.inverter_meter_power_mean_1m",
   },
 
-  pvProductionActivationThreshold: 500,
+  pvProductionActivationThreshold: 600,
   pvProductionActivationDelayMs: 15 * 60 * 1000, // 15 minutes
 
-  maxConsumptionBeforeSheddingLoad: 100,
+  maxConsumptionBeforeSheddingLoad: 250,
   minConsumptionBeforeAddingLoad: -400,
-  desiredGridConsumption: -200,
+  desiredGridConsumption: -300,
 };

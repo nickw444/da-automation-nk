@@ -116,11 +116,10 @@ export function DaytimeLoadService({
     const devices = deviceFactories.map((factory) => factory());
 
     logger.info(`Loaded ${devices.length} devices for daytime load management`);
-
     const stateManager = new SystemStateManager(
       logger,
       pvProductionSensorMean1m,
-      enableSystemSwitch.getEntity() as ByIdProxy<PICK_ENTITY<"switch">>,
+      enableSystemSwitch,
       appConfig.pvProductionActivationThreshold,
       appConfig.pvProductionActivationDelayMs,
     );

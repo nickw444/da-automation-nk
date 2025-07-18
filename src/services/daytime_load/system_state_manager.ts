@@ -1,5 +1,5 @@
-import type { ILogger } from "@digital-alchemy/core";
-import { ByIdProxy, PICK_ENTITY } from "@digital-alchemy/hass";
+import type { ILogger, RemoveCallback } from "@digital-alchemy/core";
+import { ByIdProxy, ENTITY_STATE, PICK_ENTITY, RemovableCallback, TEntityUpdateCallback } from "@digital-alchemy/hass";
 import { unwrapNumericState } from "./states_helpers";
 
 export class SystemStateManager {
@@ -12,7 +12,10 @@ export class SystemStateManager {
   constructor(
     private readonly logger: ILogger,
     private readonly pvProductionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
-    private readonly enableSystemSwitch: ByIdProxy<PICK_ENTITY<"switch">>,
+    private readonly enableSystemSwitch: {
+      is_on: boolean,
+      onUpdate(callback: TEntityUpdateCallback<PICK_ENTITY>): RemoveCallback
+    },
     private readonly pvProductionActivationThreshold: number,
     private readonly pvProductionActivationDelayMs: number,
   ) {
@@ -25,7 +28,7 @@ export class SystemStateManager {
       this.onPvProductionUpdate(pvProduction);
     });
 
-    enableSystemSwitch.onUpdate((state, previousState) => {
+    enableSystemSwitch.onUpdate((state) => {
       if (!state) {
         return;
       }
@@ -35,11 +38,11 @@ export class SystemStateManager {
 
   private getDesiredState(): "STOPPED" | "RUNNING" {
     const pvProduction = unwrapNumericState(this.pvProductionSensor.state);
-    const switchEnabled = this.enableSystemSwitch.state === "on";
-    
-    return pvProduction != null && 
-           pvProduction > this.pvProductionActivationThreshold && 
-           switchEnabled
+    const switchEnabled = this.enableSystemSwitch.is_on;
+
+    return pvProduction != null &&
+      pvProduction > this.pvProductionActivationThreshold &&
+      switchEnabled
       ? "RUNNING"
       : "STOPPED";
   }

@@ -4,11 +4,13 @@ import { Device } from "./devices/device";
 import { unwrapNumericState } from "./states_helpers";
 import { IBaseDevice } from "./devices/base_device";
 
+export const LOOP_INTERVAL = 15000;
+
 export class DeviceLoadManager {
   private loopInterval: NodeJS.Timeout | undefined = undefined;
 
   constructor(
-    private readonly devices: IBaseDevice<{delta: number}, {delta: number}>[],
+    private readonly devices: IBaseDevice<{ delta: number }, { delta: number }>[],
     private readonly logger: ILogger,
     private readonly gridConsumptionSensor: ByIdProxy<PICK_ENTITY<"sensor">>,
     private readonly gridConsumptionSensorMean1m: ByIdProxy<
@@ -17,11 +19,11 @@ export class DeviceLoadManager {
     private readonly desiredGridConsumption: number,
     private readonly maxConsumptionBeforeSheddingLoad: number,
     private readonly minConsumptionBeforeAddingLoad: number,
-  ) {}
+  ) { }
 
   start() {
     this.logger.info("Starting device load management loop");
-    this.loopInterval = setInterval(this.loop, 5000);
+    this.loopInterval = setInterval(this.loop, LOOP_INTERVAL);
   }
 
   stop() {
@@ -35,7 +37,7 @@ export class DeviceLoadManager {
   }
 
   private readonly loop = () => {
-    this.logger.debug("Running device load management loop");
+    this.logger.info("Running device load management loop");
     const gridConsumption = unwrapNumericState(
       this.gridConsumptionSensorMean1m.state,
     );
@@ -49,19 +51,19 @@ export class DeviceLoadManager {
     // Bangbang control logic
     if (gridConsumption > this.maxConsumptionBeforeSheddingLoad) {
       // Too much consumption - shed load
-      this.logger.debug(
+      this.logger.info(
         `Grid consumption ${gridConsumption} W exceeds max ${this.maxConsumptionBeforeSheddingLoad} W, shedding load`,
       );
       this.shedLoad(gridConsumption - this.desiredGridConsumption);
     } else if (gridConsumption < this.minConsumptionBeforeAddingLoad) {
       // Surplus production - add load
-      this.logger.debug(
+      this.logger.info(
         `Grid consumption ${gridConsumption} W is below min ${this.minConsumptionBeforeAddingLoad} W, adding load`,
       );
       this.addLoad(this.desiredGridConsumption - gridConsumption);
     } else {
       // Within acceptable range - no action needed
-      this.logger.debug(
+      this.logger.info(
         `Grid consumption ${gridConsumption} W is within acceptable range`,
       );
     }
@@ -69,126 +71,147 @@ export class DeviceLoadManager {
 
   private shedLoad(excessConsumption: number) {
     // Sort devices by priority (highest first for shedding - shed low priority devices first)
-    const sortedDevices = [...this.devices].sort(
-      (a, b) => b.priority - a.priority,
-    );
+    const sortedDevices = [...this.devices]
+      .filter(device => device.baseControls.managementEnabled)
+      .sort((a, b) => b.priority - a.priority);
 
-    let remainingToShed = excessConsumption;
+    this.logger.info(`shedLoad across enabled devices: [${sortedDevices.map(d => d.name).join(', ')}]`);
+    this.logger.info(` • Excess consumption: ${excessConsumption} W`);
+
+    const expectedAdditionalFutureReduction = sortedDevices.reduce((acc, device) => {
+      if (device.changeState?.type === "decrease") {
+        this.logger.info(` • ${device.name} pending decrease, future consumption: ${device.changeState.expectedFutureConsumption} W w/ current consumption: ${device.currentConsumption} W`);
+        acc += Math.min(0, device.changeState.expectedFutureConsumption - device.currentConsumption);
+      }
+      return acc;
+    }, 0);
+    let remainingToShed = excessConsumption - expectedAdditionalFutureReduction;
+    this.logger.info(` • Expected additional future reduction: ${expectedAdditionalFutureReduction} W`);
+    this.logger.info(` • Remaining to shed: ${remainingToShed} W`);
+
+    if (remainingToShed <= 0) {
+      this.logger.info(` • No load to shed.`);
+      return;
+    }
 
     for (const device of sortedDevices) {
-      if (remainingToShed <= 0) break;
+      this.logger.info(` • Processing ${device.name}, remaining to shed: ${remainingToShed}`);
 
-      // Skip if management is disabled
-      if (!device.baseControls.managementEnabled) {
-        this.logger.debug(`Skipping ${device.name} - management disabled`);
-        continue;
+      if (remainingToShed <= 0) {
+        this.logger.info(` • No further load to shed remainingToShed: ${remainingToShed}`);
+        break;
       }
 
       // Skip if device has pending changes or is in debounce
       const changeState = device.changeState;
-      if (changeState?.type === "increase" || changeState?.type === "decrease") {
-        this.logger.debug(`Skipping ${device.name} - has pending changes`);
+      if (!device.baseControls.managementEnabled) {
+        this.logger.info(` • Skipping ${device.name} - management disabled`);
         continue;
-      }
-      if (changeState?.type === "debounce") {
-        this.logger.debug(`Skipping ${device.name} - in debounce period`);
+      } else if (changeState?.type === "increase") {
+        // Device is already turning on, skip it
+        this.logger.info(` • Skipping ${device.name} - has pending increase`);
+        continue;
+      } else if (changeState?.type === "decrease") {
+        // Device is turning off, skip it
+        this.logger.info(` • Skipping ${device.name} - has pending decrease`);
+        continue;
+      } else if (changeState?.type === "debounce") {
+        this.logger.info(` • Skipping ${device.name} - in debounce period`);
         continue;
       }
 
-      const decreaseIncrements = device.decreaseIncrements;
-      if (decreaseIncrements.length > 0) {
-        // Find the best fitting increment that doesn't exceed remainingToShed
-        // Note: decrease deltas are negative, so we need to compare absolute values
-        const suitableIncrement = decreaseIncrements
-          .filter(increment => Math.abs(increment.delta) <= remainingToShed)
-          .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0]; // Pick the largest suitable increment
-
-        if (suitableIncrement !== undefined) {
-          this.logger.info(`Shedding ${Math.abs(suitableIncrement.delta)} W from ${device.name}`);
-          device.decreaseConsumptionBy(suitableIncrement);
-          remainingToShed -= Math.abs(suitableIncrement.delta);
-        } else {
-          this.logger.debug(
-            `Skipping ${device.name} - no suitable increment (available: [${decreaseIncrements.map(i => Math.abs(i.delta)).join(', ')}] W, needed: ≤${remainingToShed} W)`,
-          );
-        }
+      // Find the best fitting increment that doesn't exceed remainingToAdd
+      const allIncrements = device.decreaseIncrements;
+      const suitableIncrements = allIncrements
+        .filter(increment => Math.abs(increment.delta) <= remainingToShed)
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+      if (suitableIncrements.length > 0) {
+        const suitableIncrement = suitableIncrements[0]; // Pick the largest suitable increment
+        this.logger.info(` • Shedding ${suitableIncrement.delta} W from ${device.name}`);
+        device.decreaseConsumptionBy(suitableIncrement);
+        remainingToShed += suitableIncrement.delta; // delta is negative, so add to remaining.
+      } else {
+        this.logger.info(
+          ` • Skipping ${device.name} - no suitable increment (available: [${JSON.stringify(allIncrements)}] W, needed: ≤${remainingToShed} W)`,
+        );
       }
     }
 
     if (remainingToShed > 0) {
-      this.logger.warn(
-        `Could not shed enough load, ${remainingToShed} W remaining`,
-      );
+      this.logger.info(` • Unable to shed all remaining load: ${remainingToShed}W excess remains`);
     }
   }
 
   private addLoad(surplusCapacity: number) {
-    // Sort devices by priority (lowest first for adding)
-    const sortedDevices = [...this.devices].sort(
-      (a, b) => a.priority - b.priority,
-    );
+    // Filter then sort devices by priority (lowest first for adding)
+    const sortedDevices = [...this.devices]
+      .filter(device => device.baseControls.managementEnabled)
+      .sort((a, b) => a.priority - b.priority);
 
-    let remainingToAdd = surplusCapacity;
+    this.logger.info(`addLoad across enabled devices: [${sortedDevices.map(d => d.name).join(', ')}]`);
+    this.logger.info(` • Suplus capacity: ${surplusCapacity} W`);
 
-    // First, account for all pending increases across all devices
-    for (const device of sortedDevices) {
-      // Skip if management is disabled
-      if (!device.baseControls.managementEnabled) {
-        continue;
+    const expectedAdditionalFutureConsumption = sortedDevices.reduce((acc, device) => {
+      if (device.changeState?.type === "increase") {
+        this.logger.info(` • ${device.name} pending increase, future consumption: ${device.changeState.expectedFutureConsumption} W w/ current consumption: ${device.currentConsumption} W`);
+        acc += Math.max(0, device.changeState.expectedFutureConsumption - device.currentConsumption);
       }
+      return acc;
+    }, 0);
+    let remainingToAdd = surplusCapacity - expectedAdditionalFutureConsumption;
 
-      const changeState = device.changeState;
-      if (changeState?.type === "increase") {
-        const additionalConsumption =
-          changeState.expectedFutureConsumption - device.currentConsumption;
-        this.logger.debug(
-          `${device.name} has pending increase, accounting for ${additionalConsumption} W additional consumption (${changeState.expectedFutureConsumption} W future - ${device.currentConsumption} W current)`,
-        );
-        remainingToAdd -= additionalConsumption;
-      }
+    this.logger.info(` • Expected additional future consumption: ${expectedAdditionalFutureConsumption} W`);
+    this.logger.info(` • Remaining to add: ${remainingToAdd} W`);
+
+    if (remainingToAdd <= 0) {
+      this.logger.info(` • No load to add.`);
+      return;
     }
 
     for (const device of sortedDevices) {
-      if (remainingToAdd <= 0) break;
+      this.logger.info(` • Processing ${device.name}, remaining to add: ${remainingToAdd}`);
 
-      // Skip if management is disabled
-      if (!device.baseControls.managementEnabled) {
-        this.logger.debug(`Skipping ${device.name} - management disabled`);
-        continue;
+      if (remainingToAdd <= 0) {
+        this.logger.info(` • No further load to add remainingToAdd: ${remainingToAdd}`);
+        break;
       }
 
       // Check if device has pending changes or is in debounce
       const changeState = device.changeState;
-      if (changeState?.type === "increase") {
+      if (!device.baseControls.managementEnabled) {
+        this.logger.info(` • Skipping ${device.name} - management disabled`);
+        continue;
+      } else if (changeState?.type === "increase") {
         // Device is already turning on, skip it
-        this.logger.debug(`Skipping ${device.name} - has pending increase`);
+        this.logger.info(` • Skipping ${device.name} - has pending increase`);
         continue;
       } else if (changeState?.type === "decrease") {
         // Device is turning off, skip it
-        this.logger.debug(`Skipping ${device.name} - has pending decrease`);
+        this.logger.info(` • Skipping ${device.name} - has pending decrease`);
         continue;
       } else if (changeState?.type === "debounce") {
-        this.logger.debug(`Skipping ${device.name} - in debounce period`);
+        this.logger.info(` • Skipping ${device.name} - in debounce period`);
         continue;
       }
 
-      const increaseIncrements = device.increaseIncrements;
-      if (increaseIncrements.length > 0) {
-        // Find the best fitting increment that doesn't exceed remainingToAdd
-        const suitableIncrement = increaseIncrements
-          .filter(increment => increment.delta <= remainingToAdd)
-          .sort((a, b) => b.delta - a.delta)[0]; // Pick the largest suitable increment
-
-        if (suitableIncrement !== undefined) {
-          this.logger.info(`Adding ${suitableIncrement.delta} W to ${device.name}`);
-          device.increaseConsumptionBy(suitableIncrement);
-          remainingToAdd -= suitableIncrement.delta;
-        } else {
-          this.logger.debug(
-            `Skipping ${device.name} - no suitable increment (available: [${increaseIncrements.map(i => i.delta).join(', ')}] W, needed: ≤${remainingToAdd} W)`,
-          );
-        }
+      // Find the best fitting increment that doesn't exceed remainingToAdd
+      const allIncrements = device.increaseIncrements
+      const suitableIncrements = allIncrements
+        .filter(increment => increment.delta <= remainingToAdd)
+        .sort((a, b) => b.delta - a.delta);
+      if (suitableIncrements.length > 0) {
+        const suitableIncrement = suitableIncrements[0]; // Pick the largest suitable increment
+        this.logger.info(` • Adding ${suitableIncrement.delta} W to ${device.name}`);
+        device.increaseConsumptionBy(suitableIncrement);
+        remainingToAdd -= suitableIncrement.delta;
+      } else {
+        this.logger.info(
+          ` • Skipping ${device.name} - no suitable increment (available: [${JSON.stringify(allIncrements)}] W, needed: ≤${remainingToAdd} W)`,
+        );
       }
+    }
+    if (remainingToAdd > 0) {
+      this.logger.info(` • Unable to add all surplus load: ${remainingToAdd}W surplus remains`);
     }
   }
 }
