@@ -1,1 +1,0 @@
-export { BackyardFountainPresenceAutomation } from "./service";

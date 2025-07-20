@@ -14,8 +14,7 @@ export const MY_APPLICATION = CreateApplication({
     backyardAmbianceAutomation: BackyardAmbianceAutomation.create,
     backyardFountainPresence: BackyardFountainPresenceAutomation.create,
   },
-  configuration: {
-  },
+  configuration: {},
 });
 
 declare module "@digital-alchemy/core" {

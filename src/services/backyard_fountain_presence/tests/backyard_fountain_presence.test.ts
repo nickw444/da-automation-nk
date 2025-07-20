@@ -36,7 +36,7 @@ describe("BackyardFountainPresenceAutomation", () => {
       info: vi.fn(), debug: vi.fn(), warn: vi.fn(), 
       error: vi.fn(), fatal: vi.fn(), trace: vi.fn()
     } as ILogger;
-    
+
     mockFountainEntity = {
       state: "off",
       turn_on: vi.fn(),
@@ -62,6 +62,9 @@ describe("BackyardFountainPresenceAutomation", () => {
       mockDeckPresenceEntity,
       mockAllPresenceEntities,
     );
+
+    // Manually call setup since SimpleAutomationHelper only calls it when enabled
+    automation.setup();
 
     vi.clearAllMocks(); // Clear setup calls
   });

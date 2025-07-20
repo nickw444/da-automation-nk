@@ -2,13 +2,15 @@ import { TServiceParams } from "@digital-alchemy/core";
 import { BooleanEntityWrapper, IBooleanEntityWrapper } from "../entities/boolean_entity_wrapper";
 import { BinarySensorEntityWrapper, IBinarySensorEntityWrapper } from "../entities/binary_sensor_entity_wrapper";
 import { ISensorEntityWrapper, SensorEntityWrapper } from "../entities/sensor_entity_wrapper";
+import { SimpleAutomation, SimpleAutomationHelper } from "../base/simple_automation";
 
 const LIGHTS_OFF_DELAY_MS = 10 * 60 * 1000; // 10 minutes
 const LUX_THRESHOLD = 1000;
 
 
-export class BackyardAmbianceAutomation {
+export class BackyardAmbianceAutomation implements SimpleAutomation {
     private lightsOffTimer?: NodeJS.Timeout;
+    private readonly unregisterCallbacks: (() => void)[] = [];
 
     constructor(
         private readonly logger: TServiceParams['logger'],
@@ -17,12 +19,11 @@ export class BackyardAmbianceAutomation {
         private readonly occupancyEntities: IBinarySensorEntityWrapper[],
         private readonly outdoorIlluminationEntity: ISensorEntityWrapper,
     ) {
-        this.setupAutomation();
     }
 
-    private setupAutomation(): void {
+    setup(): void {
         // Door opens - turn lights on if dark enough
-        this.doorEntity.onUpdate((state) => {
+        const doorCallback = this.doorEntity.onUpdate((state) => {
             this.logger.info('Door state changed:', state);
             // Ignore undefined state values and only act on door opening
             if (state !== undefined && state.state === "on" && this.isDark()) {
@@ -31,24 +32,33 @@ export class BackyardAmbianceAutomation {
                 this.handleOccupancyChange();
             }
         });
+        this.unregisterCallbacks.push(doorCallback);
 
         // Occupancy changes - manage timer
         this.occupancyEntities.forEach(entity => {
-            entity.onUpdate((state) => {
+            const callback = entity.onUpdate((state) => {
                 // Ignore undefined state values (entity offline/unavailable)
                 if (state !== undefined) {
                     this.handleOccupancyChange();
                 }
             });
+            this.unregisterCallbacks.push(callback);
         });
 
         // Lux changes - turn on lights if it gets dark with presence
-        this.outdoorIlluminationEntity.onUpdate((state) => {
+        const luxCallback = this.outdoorIlluminationEntity.onUpdate((state) => {
             if (state !== undefined && this.isDark() && this.isAnyOccupancyDetected()) {
                 this.turnLightsOn();
                 this.handleOccupancyChange();
             }
         });
+        this.unregisterCallbacks.push(luxCallback);
+    }
+
+    teardown(): void {
+        this.clearLightsOffTimer();
+        this.unregisterCallbacks.forEach(callback => callback());
+        this.unregisterCallbacks.length = 0;
     }
 
     private turnLightsOn(): void {
@@ -100,11 +110,13 @@ export class BackyardAmbianceAutomation {
         }, LIGHTS_OFF_DELAY_MS);
     }
 
-    static create({ hass, logger }: TServiceParams): void {
-        new BackyardAmbianceAutomation(
+    static create(params: TServiceParams): void {
+        const { hass, logger } = params;
+        const helper = new SimpleAutomationHelper("Backyard Ambiance", params);
+        const automation = new BackyardAmbianceAutomation(
             logger,
             [
-                new BooleanEntityWrapper(hass.refBy.id('light.festoon_lights')),
+                new BooleanEntityWrapper(params.hass.refBy.id('light.festoon_lights')),
                 new BooleanEntityWrapper(hass.refBy.id('light.shed_sconces')),
                 new BooleanEntityWrapper(hass.refBy.id('light.back_garden')),
                 new BooleanEntityWrapper(hass.refBy.id('light.deck_garden_lights')),
@@ -117,5 +129,6 @@ export class BackyardAmbianceAutomation {
             ],
             new SensorEntityWrapper(hass.refBy.id('sensor.ecowitt_hub_solar_lux'))
         );
+        helper.register(automation);   
     }
 }

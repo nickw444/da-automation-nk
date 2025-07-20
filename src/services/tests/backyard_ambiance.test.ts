@@ -102,6 +102,9 @@ describe("BackyardAmbianceAutomation", () => {
       mockOutdoorIlluminationEntity,
     );
 
+    // Manually call setup since SimpleAutomation only calls it when enabled
+    automation.setup();
+
     // Clear mocks after setup to ignore any initial state processing
     vi.clearAllMocks();
   });

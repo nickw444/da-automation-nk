@@ -1,13 +1,15 @@
 import { TServiceParams } from "@digital-alchemy/core";
 import { IBooleanEntityWrapper, BooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
 import { BinarySensorEntityWrapper, IBinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_wrapper";
+import { SimpleAutomation, SimpleAutomationHelper } from "../../base/simple_automation";
 
 const PRESENCE_ON_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 const PRESENCE_OFF_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
-export class BackyardFountainPresenceAutomation {
+export class BackyardFountainPresenceAutomation implements SimpleAutomation {
     private fountainOnTimer?: NodeJS.Timeout;
     private fountainOffTimer?: NodeJS.Timeout;
+    private readonly unregisterCallbacks: (() => void)[] = [];
 
     constructor(
         private readonly logger: TServiceParams['logger'],
@@ -15,32 +17,44 @@ export class BackyardFountainPresenceAutomation {
         private readonly deckPresenceEntity: IBinarySensorEntityWrapper,
         private readonly allPresenceEntities: IBinarySensorEntityWrapper[],
     ) {
-        this.setupAutomation();
+        this.fountainEntity = fountainEntity;
+        this.deckPresenceEntity = deckPresenceEntity;
+        this.allPresenceEntities = allPresenceEntities;
     }
 
-    private setupAutomation(): void {
+    setup(): void {
         // Monitor deck presence for turn-on logic
-        this.deckPresenceEntity.onUpdate((state) => {
+        const deckCallback = this.deckPresenceEntity.onUpdate((state) => {
             if (state !== undefined) {
                 this.handleDeckPresenceChange();
             }
         });
+        this.unregisterCallbacks.push(deckCallback);
 
         // Monitor all presence entities for turn-off logic
         this.allPresenceEntities.forEach(entity => {
-            entity.onUpdate((state) => {
+            const callback = entity.onUpdate((state) => {
                 if (state !== undefined) {
                     this.handleAnyPresenceChange();
                 }
             });
+            this.unregisterCallbacks.push(callback);
         });
 
         // Monitor fountain state changes (including manual overrides)
-        this.fountainEntity.onUpdate((state) => {
+        const fountainCallback = this.fountainEntity.onUpdate((state) => {
             if (state !== undefined) {
                 this.handleFountainStateChange();
             }
         });
+        this.unregisterCallbacks.push(fountainCallback);
+    }
+
+    teardown(): void {
+        this.clearFountainOnTimer();
+        this.clearFountainOffTimer();
+        this.unregisterCallbacks.forEach(callback => callback());
+        this.unregisterCallbacks.length = 0;
     }
 
     private handleDeckPresenceChange(): void {
@@ -129,8 +143,10 @@ export class BackyardFountainPresenceAutomation {
         return this.allPresenceEntities.some(entity => entity.state === "on");
     }
 
-    static create({ hass, logger }: TServiceParams): void {
-        new BackyardFountainPresenceAutomation(
+    static create(params: TServiceParams): void {
+        const { hass, logger } = params;
+        const helper = new SimpleAutomationHelper("Backyard Fountain Presence", params);
+        const automation = new BackyardFountainPresenceAutomation(
             logger,
             new BooleanEntityWrapper(hass.refBy.id('switch.front_garden_fountain')),
             new BinarySensorEntityWrapper(hass.refBy.id('binary_sensor.shed_fp2_presence_sensor_deck')),
@@ -141,5 +157,6 @@ export class BackyardFountainPresenceAutomation {
                 new BinarySensorEntityWrapper(hass.refBy.id('binary_sensor.shed_fp2_presence_sensor_all_zones'))
             ]
         );
+        helper.register(automation);
     }
 }
