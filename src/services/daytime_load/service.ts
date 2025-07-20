@@ -17,7 +17,6 @@ export function DaytimeLoadService({
   hass,
   logger,
   lifecycle,
-  config,
   context,
   synapse,
 }: TServiceParams) {

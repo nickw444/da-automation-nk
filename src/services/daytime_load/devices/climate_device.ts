@@ -551,6 +551,8 @@ export class ClimateHassControls implements IClimateHassControls {
     // Following some crude hacks to resolve type-checking stack issues...
     // private readonly desiredSetpointEntity: ReturnType<TServiceParams["synapse"]["number"]>;
     private readonly desiredSetpointEntity: { native_value: number };
+    // TODO(NW): After https://github.com/Digital-Alchemy-TS/synapse/pull/126
+    // private readonly desiredSetpointEntity: SynapseNumber;
     // private readonly desiredModeEntity: ReturnType<TServiceParams["synapse"]["select"]>;
     private readonly desiredModeEntity: { current_option: string };
     // private readonly comfortSetpointEntity: ReturnType<TServiceParams["synapse"]["number"]>;
