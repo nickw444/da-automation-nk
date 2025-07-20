@@ -1,9 +1,13 @@
-import { ByIdProxy, PICK_ENTITY, RemovableCallback } from "@digital-alchemy/hass";
+import {
+  ByIdProxy,
+  PICK_ENTITY,
+  RemovableCallback,
+} from "@digital-alchemy/hass";
 
 export interface IHumidifierEntityWrapper {
   // State access
-  get state(): "off" | "on" | undefined
-  
+  get state(): "off" | "on" | undefined;
+
   // Essential attributes only
   get attributes(): {
     humidity: number;
@@ -12,13 +16,13 @@ export interface IHumidifierEntityWrapper {
     mode: string;
     available_modes: string[];
   };
-  
+
   // Control methods
   setHumidity(humidity: number): void;
   setMode(mode: string): void;
   turnOn(): void;
   turnOff(): void;
-  
+
   // Update callback
   onUpdate: RemovableCallback<PICK_ENTITY<"humidifier">>;
 }
@@ -37,7 +41,7 @@ export interface MockHumidifierEntityWrapper extends IHumidifierEntityWrapper {
 
 export class HumidifierEntityWrapper implements IHumidifierEntityWrapper {
   constructor(
-    private readonly entityRef: ByIdProxy<PICK_ENTITY<"humidifier">>
+    private readonly entityRef: ByIdProxy<PICK_ENTITY<"humidifier">>,
   ) {}
 
   get state(): "off" | "on" | undefined {

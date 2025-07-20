@@ -21,7 +21,9 @@ export interface MockNumberEntityWrapper extends INumberEntityWrapper {
 
 export class NumberEntityWrapper implements INumberEntityWrapper {
   constructor(
-    private readonly entityRef: ByIdProxy<PICK_ENTITY<"number" | "input_number">>
+    private readonly entityRef: ByIdProxy<
+      PICK_ENTITY<"number" | "input_number">
+    >,
   ) {}
 
   get state(): number {
@@ -32,16 +34,16 @@ export class NumberEntityWrapper implements INumberEntityWrapper {
   get attributes() {
     const attrs = this.entityRef.attributes;
     return {
-      min: 'min' in attrs ? attrs.min : undefined,
-      max: 'max' in attrs ? attrs.max : undefined,
-      step: 'step' in attrs ? attrs.step : undefined,
+      min: "min" in attrs ? attrs.min : undefined,
+      max: "max" in attrs ? attrs.max : undefined,
+      step: "step" in attrs ? attrs.step : undefined,
     };
   }
 
   setValue(value: number): void {
     const attrs = this.attributes;
     let finalValue = value;
-    
+
     // Apply constraints only if they are defined
     if (attrs.min != null) {
       finalValue = Math.max(finalValue, attrs.min);
@@ -49,12 +51,12 @@ export class NumberEntityWrapper implements INumberEntityWrapper {
     if (attrs.max != null) {
       finalValue = Math.min(finalValue, attrs.max);
     }
-    
+
     // Apply step rounding only if step is defined
     if (attrs.step != null && attrs.step > 0) {
       finalValue = Math.round(finalValue / attrs.step) * attrs.step;
     }
-    
+
     this.entityRef.set_value({ value: finalValue });
   }
 }

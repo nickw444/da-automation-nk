@@ -1,4 +1,8 @@
-import { ByIdProxy, PICK_ENTITY, RemovableCallback } from "@digital-alchemy/hass";
+import {
+  ByIdProxy,
+  PICK_ENTITY,
+  RemovableCallback,
+} from "@digital-alchemy/hass";
 
 export interface ISensorEntityWrapper {
   get state(): string | number;
@@ -10,15 +14,13 @@ export interface MockSensorEntityWrapper extends ISensorEntityWrapper {
 }
 
 export class SensorEntityWrapper implements ISensorEntityWrapper {
-  constructor(
-    private readonly entityRef: ByIdProxy<PICK_ENTITY<"sensor">>
-  ) {}
+  constructor(private readonly entityRef: ByIdProxy<PICK_ENTITY<"sensor">>) {}
 
   get state(): string | number {
     return this.entityRef.state;
   }
 
   get onUpdate(): RemovableCallback<PICK_ENTITY<"sensor">> {
-    return this.entityRef.onUpdate
+    return this.entityRef.onUpdate;
   }
 }

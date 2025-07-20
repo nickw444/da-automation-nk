@@ -5,7 +5,7 @@ export interface IClimateEntityWrapper {
   get state(): "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry";
   get roomTemperature(): number;
   get targetTemperature(): number;
-  
+
   // Essential attributes only
   get attributes(): {
     current_temperature: number;
@@ -14,10 +14,15 @@ export interface IClimateEntityWrapper {
     max_temp: number;
     hvac_modes: ("off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry")[];
   };
-  
+
   // Control methods
-  setTemperature(options: { temperature: number; hvac_mode?: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry" }): void;
-  setHvacMode(mode: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry"): void;
+  setTemperature(options: {
+    temperature: number;
+    hvac_mode?: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry";
+  }): void;
+  setHvacMode(
+    mode: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry",
+  ): void;
   turnOff(): void;
 }
 
@@ -34,9 +39,7 @@ export interface MockClimateEntityWrapper extends IClimateEntityWrapper {
 }
 
 export class ClimateEntityWrapper implements IClimateEntityWrapper {
-  constructor(
-    private readonly entityRef: ByIdProxy<PICK_ENTITY<"climate">>
-  ) {}
+  constructor(private readonly entityRef: ByIdProxy<PICK_ENTITY<"climate">>) {}
 
   get state(): "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry" {
     return this.entityRef.state;
@@ -60,14 +63,19 @@ export class ClimateEntityWrapper implements IClimateEntityWrapper {
     };
   }
 
-  setTemperature(options: { temperature: number; hvac_mode?: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry" }): void {
+  setTemperature(options: {
+    temperature: number;
+    hvac_mode?: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry";
+  }): void {
     this.entityRef.set_temperature({
       temperature: options.temperature,
       ...(options.hvac_mode && { hvac_mode: options.hvac_mode }),
     });
   }
 
-  setHvacMode(mode: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry"): void {
+  setHvacMode(
+    mode: "off" | "heat_cool" | "cool" | "heat" | "fan_only" | "dry",
+  ): void {
     this.entityRef.set_hvac_mode({
       hvac_mode: mode,
     });
