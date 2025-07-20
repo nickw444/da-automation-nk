@@ -14,7 +14,8 @@ export const MY_APPLICATION = CreateApplication({
     backyardAmbianceAutomation: BackyardAmbianceAutomation.create,
     backyardFountainPresence: BackyardFountainPresenceAutomation.create,
   },
-  configuration: {},
+  configuration: {
+  },
 });
 
 declare module "@digital-alchemy/core" {
@@ -23,4 +24,4 @@ declare module "@digital-alchemy/core" {
   }
 }
 
-await MY_APPLICATION.bootstrap();
+export const METADATA_UNIQUE_ID = "da_automation_nk";

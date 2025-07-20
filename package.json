@@ -6,8 +6,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/main.ts",
-    "start": "node dist/main.js",
+    "dev": "tsx src/dev.main.ts",
+    "start": "node dist/prod.main.js",
     "test": "vitest --run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
