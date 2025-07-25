@@ -154,6 +154,8 @@ sections:
             name: Hallway Climate
           - entity: sensor.subfloor_fan_current_consumption
             name: Subfloor Fan
+          - entity: sensor.dehumidifier_current_consumption
+            name: Dehumidifier
           - entity: sensor.tesla_wall_connector_power
             name: Tesla Charger
         grid_options:
@@ -241,6 +243,34 @@ sections:
           - entity: sensor.subfloor_fan_current_consumption
             name: Current Consumption
             icon: mdi:flash
+      - type: heading
+        heading: Dehumidifier (Priority 4)
+        heading_style: subtitle
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: switch.daytime_load_dehumidifier_management_enabled
+            name: Management Enabled
+            icon: mdi:cog
+          - entity: humidifier.kogan_smart_dehumidifier
+            name: Dehumidifier
+            icon: mdi:air-humidifier
+            secondary_info: Priority 4 • Variable Power
+          - entity: sensor.dehumidifier_current_consumption
+            name: Current Consumption
+            icon: mdi:flash
+          - entity: sensor.dehumidifier_climate_humidity
+            name: Current Humidity
+            icon: mdi:water-percent
+          - entity: number.daytime_load_dehumidifier_desired_setpoint
+            name: Desired Setpoint
+            icon: mdi:water-percent
+          - entity: switch.daytime_load_dehumidifier_enable_comfort_setpoint
+            name: Enable Comfort Setpoint
+            icon: mdi:water-thermometer
+          - entity: number.daytime_load_dehumidifier_comfort_setpoint
+            name: Comfort Setpoint
+            icon: mdi:home-thermometer-outline
       - type: heading
         heading: Tesla Charger (Priority 100)
         heading_style: subtitle

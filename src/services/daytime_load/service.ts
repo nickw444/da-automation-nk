@@ -5,6 +5,8 @@ import { BooleanEntityWrapper } from "../../entities/boolean_entity_wrapper";
 import { ClimateDevice, ClimateHassControls } from "./devices/climate_device";
 import { ClimateEntityWrapper } from "../../entities/climate_entity_wrapper";
 import { SensorEntityWrapper } from "../../entities/sensor_entity_wrapper";
+import { DehumidifierDevice, DehumidifierHassControls } from "./devices/dehumidifier_device";
+import { HumidifierEntityWrapper } from "../../entities/humidifier_entity_wrapper";
 import { DirectConsumptionDevice } from "./devices/direct_consumption_device";
 import { NumberEntityWrapper } from "../../entities/number_entity_wrapper";
 import { BinarySensorEntityWrapper } from "../../entities/binary_sensor_entity_wrapper";
@@ -53,6 +55,25 @@ export function DaytimeLoadService({
               climateEntityWrapper,
               consumptionSensorWrapper,
               climateHassControls,
+              deviceConfig.opts,
+            );
+          }
+        case "dehumidifier":
+          // Create Dehumidifier Entity and Sensor Entity wrappers
+          // Eagerly create controls to register synapse entities prior to onReady.
+          const dehumidifierHassControls = new DehumidifierHassControls(deviceConfig.name, synapse, context, baseHassControls, deviceConfig.opts);
+          return () => {
+            const humidifierEntityWrapper = new HumidifierEntityWrapper(hass.refBy.id(deviceConfig.entityId));
+            const consumptionSensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.consumptionEntityId));
+            const currentHumiditySensorWrapper = new SensorEntityWrapper(hass.refBy.id(deviceConfig.currentHumidityEntityId));
+            return new DehumidifierDevice(
+              deviceConfig.name,
+              deviceConfig.priority,
+              logger,
+              humidifierEntityWrapper,
+              consumptionSensorWrapper,
+              currentHumiditySensorWrapper,
+              dehumidifierHassControls,
               deviceConfig.opts,
             );
           }

@@ -5,6 +5,7 @@ import { PICK_ENTITY } from "@digital-alchemy/hass";
 import { ClimateDeviceOptions } from "./devices/climate_device";
 import { BooleanDeviceOptions } from "./devices/boolean_device";
 import { DirectConsumptionDeviceOptions } from "./devices/direct_consumption_device";
+import { DehumidifierDeviceOptions } from "./devices/dehumidifier_device";
 
 type BaseDeviceConfig = {
   priority: number; // Priority for load management (lower number = higher priority)
@@ -27,10 +28,12 @@ type ClimateDeviceConfig = {
   opts: ClimateDeviceOptions;
 };
 
-type HumidifierDeviceConfig = {
-  kind: "humidifier";
+type DehumidifierDeviceConfig = {
+  kind: "dehumidifier";
   entityId: PICK_ENTITY<"humidifier">;
   consumptionEntityId: PICK_ENTITY<"sensor">;
+  currentHumidityEntityId: PICK_ENTITY<"sensor">;
+  opts: DehumidifierDeviceOptions;
 };
 
 type DirectConsumptionDeviceConfig = {
@@ -47,7 +50,7 @@ type DeviceConfig = BaseDeviceConfig &
   (
     | BooleanDeviceConfig
     | ClimateDeviceConfig
-    | HumidifierDeviceConfig
+    | DehumidifierDeviceConfig
     | DirectConsumptionDeviceConfig
   );
 
@@ -145,6 +148,24 @@ const devices: DeviceConfig[] = [
       changeTransitionMs: 10_000, // 10 seconds for consumption to stabilize after on/off
       turnOffDebounce: 15 * 60_000, // 15 minutes debounce after turning off
       turnOnDebounce: 5 * 60_000, // 5 minutes debounce after turning on
+    },
+  },
+  {
+    kind: "dehumidifier",
+    entityId: "humidifier.kogan_smart_dehumidifier",
+    consumptionEntityId: "sensor.dehumidifier_current_consumption",
+    currentHumidityEntityId: "sensor.dehumidifier_climate_humidity",
+    name: "Dehumidifier",
+    priority: 4,
+    opts: {
+      minSetpoint: 40,
+      maxSetpoint: 80,
+      setpointStep: 5,
+      expectedDehumidifyingConsumption: 250,
+      expectedFanOnlyConsumption: 30,
+      fanOnlyTimeoutMs: 30 * 60_000, // 30 minutes
+      setpointChangeTransitionMs: 30_000, // 30 seconds for consumption to stabilize
+      setpointDebounceMs: 2 * 60_000, // 2 minutes before subsequent changes
     },
   },
   {
