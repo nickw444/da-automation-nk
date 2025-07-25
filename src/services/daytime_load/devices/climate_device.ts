@@ -199,6 +199,10 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             const step = this.opts.setpointStep;
             let lastDelta: number | undefined;
 
+            // Check if device is at very low consumption (compressor not running)
+            // Use a threshold of 50W to detect when compressor is effectively off
+            const isLowConsumption = this.currentConsumption < 50;
+
             if (desiredMode === "heat") {
                 for (let targetSetpoint = currentSetpoint + step;
                     targetSetpoint <= desiredSetpoint && targetSetpoint <= this.opts.maxSetpoint;
@@ -206,14 +210,24 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
 
-                    // For running devices, calculate consumption delta based on setpoint change
-                    const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                    const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
-                    const projectedConsumption = this.currentConsumption + deltaConsumption;
+                    let delta: number;
+                    if (isLowConsumption) {
+                        // Use startup calculation when device is on but compressor not running
+                        // Calculate power based on the setpoint delta from current setpoint
+                        const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
+                        const temperaturePower = setpointDelta * this.opts.consumptionPerDegree;
+                        const targetConsumption = this.opts.compressorStartupMinConsumption + temperaturePower;
+                        delta = targetConsumption - this.currentConsumption;
+                    } else {
+                        // For running devices, calculate consumption delta based on setpoint change
+                        const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
+                        const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
+                        const projectedConsumption = this.currentConsumption + deltaConsumption;
 
-                    // Clamp to maximum consumption and recalculate delta
-                    const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
-                    const delta = clampedConsumption - this.currentConsumption;
+                        // Clamp to maximum consumption and recalculate delta
+                        const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
+                        delta = clampedConsumption - this.currentConsumption;
+                    }
 
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
                         increments.push({
@@ -230,14 +244,24 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
 
                     // Note: Comfort setpoint should NOT limit increase operations - always move toward desired setpoint
 
-                    // For running devices, calculate consumption delta based on setpoint change
-                    const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                    const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
-                    const projectedConsumption = this.currentConsumption + deltaConsumption;
+                    let delta: number;
+                    if (isLowConsumption) {
+                        // Use startup calculation when device is on but compressor not running
+                        // Calculate power based on the setpoint delta from current setpoint
+                        const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
+                        const temperaturePower = setpointDelta * this.opts.consumptionPerDegree;
+                        const targetConsumption = this.opts.compressorStartupMinConsumption + temperaturePower;
+                        delta = targetConsumption - this.currentConsumption;
+                    } else {
+                        // For running devices, calculate consumption delta based on setpoint change
+                        const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
+                        const deltaConsumption = setpointDelta * this.opts.consumptionPerDegree;
+                        const projectedConsumption = this.currentConsumption + deltaConsumption;
 
-                    // Clamp to maximum consumption and recalculate delta
-                    const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
-                    const delta = clampedConsumption - this.currentConsumption;
+                        // Clamp to maximum consumption and recalculate delta
+                        const clampedConsumption = Math.min(projectedConsumption, this.opts.maxCompressorConsumption);
+                        delta = clampedConsumption - this.currentConsumption;
+                    }
 
                     if (delta > 0 && delta !== lastDelta) { // Only include if it actually increases consumption and is not duplicate
                         increments.push({

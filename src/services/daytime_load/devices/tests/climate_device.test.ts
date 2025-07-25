@@ -352,6 +352,79 @@ describe("ClimateDevice", () => {
           }),
         ]);
       });
+
+      it("should use compressor startup calculation when device is on but at low consumption", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.current_temperature = 22; // Room temp
+        mockClimateEntity.attributes.temperature = 24; // Current setpoint - device has reached setpoint
+        mockSensorEntity.state = 30; // Very low consumption - compressor not running
+
+        hassControls.desiredMode = "cool";
+        hassControls.desiredSetpoint = 20; // Want more aggressive cooling
+
+        const increments = device.increaseIncrements;
+
+        // Should calculate as compressor startup + setpoint differential
+        // For 24°C -> 23°C: setpointDelta = |24-23| = 1°C, power = 600W + 1*350W = 950W, delta = 950W - 30W = 920W
+        // For 24°C -> 22°C: setpointDelta = |24-22| = 2°C, power = 600W + 2*350W = 1300W, delta = 1300W - 30W = 1270W 
+        // For 24°C -> 21°C: setpointDelta = |24-21| = 3°C, power = 600W + 3*350W = 1650W, delta = 1650W - 30W = 1620W
+        // For 24°C -> 20°C: setpointDelta = |24-20| = 4°C, power = 600W + 4*350W = 2000W, delta = 2000W - 30W = 1970W
+
+        expect(increments).toEqual([
+          expect.objectContaining({
+            targetSetpoint: 23,
+            delta: 920, // 950W total - 30W current = 920W delta
+          }),
+          expect.objectContaining({
+            targetSetpoint: 22,
+            delta: 1270, // 1300W total - 30W current = 1270W delta
+          }),
+          expect.objectContaining({
+            targetSetpoint: 21,
+            delta: 1620, // 1650W total - 30W current = 1620W delta
+          }),
+          expect.objectContaining({
+            targetSetpoint: 20,
+            delta: 1970, // 2000W total - 30W current = 1970W delta
+          }),
+        ]);
+      });
+
+      it("should use normal setpoint calculation when device consumption is above low threshold", () => {
+        mockClimateEntity.state = "cool";
+        mockClimateEntity.attributes.current_temperature = 22; // Room temp
+        mockClimateEntity.attributes.temperature = 24; // Current setpoint
+        mockSensorEntity.state = 800; // Normal consumption - above 50W threshold
+
+        hassControls.desiredMode = "cool";
+        hassControls.desiredSetpoint = 20; // Want more aggressive cooling
+
+        const increments = device.increaseIncrements;
+
+        // Should calculate as normal setpoint delta consumption
+        // For 24°C -> 23°C: setpointDelta = 1°C, deltaConsumption = 1*350W = 350W, delta = 350W
+        // For 24°C -> 22°C: setpointDelta = 2°C, deltaConsumption = 2*350W = 700W, delta = 700W
+        // etc.
+
+        expect(increments).toEqual([
+          expect.objectContaining({
+            targetSetpoint: 23,
+            delta: 350, // Normal setpoint change calculation
+          }),
+          expect.objectContaining({
+            targetSetpoint: 22,
+            delta: 700,
+          }),
+          expect.objectContaining({
+            targetSetpoint: 21,
+            delta: 1050,
+          }),
+          expect.objectContaining({
+            targetSetpoint: 20,
+            delta: 1400,
+          }),
+        ]);
+      });
     });
 
     describe("Decrease Increments", () => {
