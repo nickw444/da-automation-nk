@@ -99,7 +99,7 @@ export function DaytimeLoadService({
             );
           }
         default:
-          logger.error(`Unsupported device kind: ${deviceConfig.kind}`);
+          logger.error(`Unsupported device kind: ${(deviceConfig as any).kind}`);
           return null;
       }
     })
