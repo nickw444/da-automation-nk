@@ -181,8 +181,8 @@ const devices: DeviceConfig[] = [
       startingMinCurrent: 5,
       maxCurrent: 20,
       currentStep: 1,
-      changeTransitionMs: 30_000, // 30 seconds for consumption to stabilize after on/off
-      debounceMs: 30_000, // additional 30 seconds debounce before further changes
+      changeTransitionMs: 15_000, // 15 seconds for consumption to stabilize after on/off
+      debounceMs: 15_000, // additional 15 seconds debounce before further changes
       // <= 3A for > 10 minutes
       stoppingThreshold: 3,
       stoppingTimeoutMs: 10 * 60_000,
