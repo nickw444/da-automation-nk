@@ -155,11 +155,7 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
      * - Temperature differential reductions from setpoint changes
      */
     get decreaseIncrements(): ClimateIncrement[] {
-        const roomTemp = this.climateEntityRef.roomTemperature;
-        const currentConsumption = this.currentConsumption;
-        const desiredSetpoint = this.hassControls.desiredSetpoint;
-        const desiredMode = this.hassControls.desiredMode;
-        const increments: ClimateIncrement[] = [];
+        const { desiredMode, enableComfortSetpoint, comfortSetpoint } = this.hassControls;
 
         // Handle device-off case - no decreases possible
         if (this.climateEntityRef.state === "off") {
@@ -167,82 +163,55 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             return [];
         }
 
-        // Device is on - calculate ways to reduce consumption
         const currentSetpoint = this.climateEntityRef.targetTemperature;
         const currentMode = this.climateEntityRef.state;
+        const currentConsumption = this.currentConsumption;
+        const signedSetpointStep = this.opts.setpointStep * (desiredMode === 'heat' ? -1 : 1);
 
-        // Generate setpoint decreases (away from desired setpoint)
-        const step = this.opts.setpointStep;
-        let lastDelta: number | undefined;
-
-        if (desiredMode === "heat") {
-            // For heating, move setpoint lower (less aggressive heating)
-            const lowerBound = (this.hassControls.enableComfortSetpoint && this.hassControls.comfortSetpoint !== undefined)
-                ? this.hassControls.comfortSetpoint
-                : this.opts.minSetpoint;
-
-            for (let targetSetpoint = currentSetpoint - step;
-                targetSetpoint >= lowerBound && targetSetpoint >= this.opts.minSetpoint;
-                targetSetpoint -= step) {
-
-                // Calculate consumption reduction (negative delta)
-                const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const consumptionReduction = setpointDelta * this.opts.consumptionPerDegree;
-
-                // Clamp reduction to not go below minimum consumption
-                const maxReduction = currentConsumption - this.opts.heatCoolMinConsumption;
-                const clampedReduction = Math.min(consumptionReduction, maxReduction);
-                const delta = -clampedReduction; // Negative for decrease increments
-
-                if (clampedReduction > 0 && delta !== lastDelta) { // Only include if it actually decreases consumption and is not duplicate
-                    increments.push({
-                        delta,
-                        targetSetpoint,
-                    });
-                    lastDelta = delta;
-                }
-            }
-        } else if (desiredMode === "cool") {
-            // For cooling, move setpoint higher (less aggressive cooling)
-            const upperBound = (this.hassControls.enableComfortSetpoint && this.hassControls.comfortSetpoint !== undefined)
-                ? this.hassControls.comfortSetpoint
+        // Calculate setpoint boundary based on mode and comfort settings
+        const setpointBound = desiredMode === "heat"
+            ? (enableComfortSetpoint && comfortSetpoint !== undefined) 
+                ? Math.max(comfortSetpoint, this.opts.minSetpoint)
+                : this.opts.minSetpoint
+            : (enableComfortSetpoint && comfortSetpoint !== undefined)
+                ? Math.min(comfortSetpoint, this.opts.maxSetpoint)
                 : this.opts.maxSetpoint;
 
-            for (let targetSetpoint = currentSetpoint + step;
-                targetSetpoint <= upperBound && targetSetpoint <= this.opts.maxSetpoint;
-                targetSetpoint += step) {
+        // Generate setpoint decreases (away from desired setpoint)
+        const setpoints = range(currentSetpoint + signedSetpointStep, setpointBound, this.opts.setpointStep);
 
-                // Calculate consumption reduction (negative delta)
-                const setpointDelta = Math.abs(targetSetpoint - currentSetpoint);
-                const consumptionReduction = setpointDelta * this.opts.consumptionPerDegree;
+        const setpointIncrements = setpoints.map(setpoint => {
+            const setpointDelta = Math.abs(setpoint - currentSetpoint);
+            const consumptionReduction = setpointDelta * this.opts.consumptionPerDegree;
+            const maxReduction = currentConsumption - this.opts.heatCoolMinConsumption;
+            const clampedReduction = Math.min(consumptionReduction, maxReduction);
+            const delta = -clampedReduction; // Negative for decrease increments
 
-                // Clamp reduction to not go below minimum consumption
-                const maxReduction = currentConsumption - this.opts.heatCoolMinConsumption;
-                const clampedReduction = Math.min(consumptionReduction, maxReduction);
-                const delta = -clampedReduction; // Negative for decrease increments
-
-                if (clampedReduction > 0 && delta !== lastDelta) { // Only include if it actually decreases consumption and is not duplicate
-                    increments.push({
-                        delta,
-                        targetSetpoint,
-                    });
-                    lastDelta = delta;
-                }
+            if (clampedReduction <= 0) {
+                return undefined;
             }
-        }
+
+            return {
+                delta,
+                targetSetpoint: setpoint,
+            };
+        })
+        .filter(exists)
+        .filter(byUniqueDelta());
 
         // Handle mode transitions to fan-only (only when no comfort setpoint specified)
-        if ((currentMode === "heat" || currentMode === "cool") && !this.hassControls.enableComfortSetpoint) {
+        const fanOnlyIncrements = [];
+        if ((currentMode === "heat" || currentMode === "cool") && !enableComfortSetpoint) {
             const fanOnlyReduction = currentConsumption - this.opts.fanOnlyMinConsumption;
             if (fanOnlyReduction > 0) {
-                increments.push({
+                fanOnlyIncrements.push({
                     delta: -fanOnlyReduction, // Negative for decrease increments
-                    modeChange: "fan_only",
+                    modeChange: "fan_only" as const,
                 });
             }
         }
 
-        return increments;
+        return [...setpointIncrements, ...fanOnlyIncrements];
     }
 
     get currentConsumption(): number {
