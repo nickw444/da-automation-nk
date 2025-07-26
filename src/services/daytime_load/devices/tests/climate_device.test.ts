@@ -288,12 +288,12 @@ describe("ClimateDevice", () => {
           expect.objectContaining({
             targetSetpoint: 23,
             modeChange: "cool",
-            delta: 800, // 600W (startup) + |24-23|*350W = 600W + 350W = 950W total, 950W - 150W = 800W delta
+            delta: 950, // 600W (startup) + |24-23|*350W = 600W + 350W = 950W delta
           }),
           expect.objectContaining({
             targetSetpoint: 22,
             modeChange: "cool",
-            delta: 1150, // 600W (startup) + |24-22|*350W = 600W + 700W = 1300W total, 1300W - 150W = 1150W delta
+            delta: 1300, // 600W (startup) + |24-22|*350W = 600W + 700W = 1300W delta
           }),
         ]);
       });
@@ -365,27 +365,27 @@ describe("ClimateDevice", () => {
         const increments = device.increaseIncrements;
 
         // Should calculate as compressor startup + setpoint differential
-        // For 24°C -> 23°C: setpointDelta = |24-23| = 1°C, power = 600W + 1*350W = 950W, delta = 950W - 30W = 920W
-        // For 24°C -> 22°C: setpointDelta = |24-22| = 2°C, power = 600W + 2*350W = 1300W, delta = 1300W - 30W = 1270W 
-        // For 24°C -> 21°C: setpointDelta = |24-21| = 3°C, power = 600W + 3*350W = 1650W, delta = 1650W - 30W = 1620W
-        // For 24°C -> 20°C: setpointDelta = |24-20| = 4°C, power = 600W + 4*350W = 2000W, delta = 2000W - 30W = 1970W
+        // For 24°C -> 23°C: setpointDelta = |24-23| = 1°C, power = 600W + 1*350W = 950W
+        // For 24°C -> 22°C: setpointDelta = |24-22| = 2°C, power = 600W + 2*350W = 1300W
+        // For 24°C -> 21°C: setpointDelta = |24-21| = 3°C, power = 600W + 3*350W = 1650W
+        // For 24°C -> 20°C: setpointDelta = |24-20| = 4°C, power = 600W + 4*350W = 2000W
 
         expect(increments).toEqual([
           expect.objectContaining({
             targetSetpoint: 23,
-            delta: 920, // 950W total - 30W current = 920W delta
+            delta: 950,
           }),
           expect.objectContaining({
             targetSetpoint: 22,
-            delta: 1270, // 1300W total - 30W current = 1270W delta
+            delta: 1300,
           }),
           expect.objectContaining({
             targetSetpoint: 21,
-            delta: 1620, // 1650W total - 30W current = 1620W delta
+            delta: 1650,
           }),
           expect.objectContaining({
             targetSetpoint: 20,
-            delta: 1970, // 2000W total - 30W current = 1970W delta
+            delta: 2000,
           }),
         ]);
       });
