@@ -114,12 +114,18 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
             ? this.climateEntityRef.roomTemperature
             : this.climateEntityRef.targetTemperature;
 
+        if (currentMode === 'heat' && currentSetpoint >= desiredSetpoint
+            || currentMode === 'cool' && currentSetpoint <= desiredSetpoint) {
+            // When in desired setpoint is reached, then we cannot increase consumption
+            return []
+        }
+
         const setpoints = this.climateEntityRef.state === "off"
-            ? [desiredMode === 'heat' 
+            ? [desiredMode === 'heat'
                 ? Math.min(desiredSetpoint, currentSetpoint + signedPowerOnSetpointOffset)
                 : Math.max(desiredSetpoint, currentSetpoint + signedPowerOnSetpointOffset)]
             : range(currentSetpoint + signedSetpointStep, desiredSetpoint, this.opts.setpointStep);
-        
+
         return setpoints.map(setpoint => {
             const tempDiff = Math.abs(currentSetpoint - setpoint);
             const temperaturePower = tempDiff * this.opts.consumptionPerDegree;
@@ -137,8 +143,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                 targetSetpoint: setpoint,
             });
         })
-        .filter(exists)
-        .filter(byUniqueDelta());
+            .filter(exists)
+            .filter(byUniqueDelta());
     }
 
     /**
@@ -168,9 +174,17 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
         const currentConsumption = this.currentConsumption;
         const signedSetpointStep = this.opts.setpointStep * (desiredMode === 'heat' ? -1 : 1);
 
+        if (currentMode == 'fan_only'
+            || currentMode === 'heat' && comfortSetpoint != null && currentSetpoint <= comfortSetpoint
+            || currentMode === 'cool' && comfortSetpoint != null && currentSetpoint >= comfortSetpoint) {
+            // When in fan-only or when comfort setpoint is reached, then we cannot decrease 
+            // consumption
+            return []
+        }
+
         // Calculate setpoint boundary based on mode and comfort settings
         const setpointBound = desiredMode === "heat"
-            ? (enableComfortSetpoint && comfortSetpoint !== undefined) 
+            ? (enableComfortSetpoint && comfortSetpoint !== undefined)
                 ? Math.max(comfortSetpoint, this.opts.minSetpoint)
                 : this.opts.minSetpoint
             : (enableComfortSetpoint && comfortSetpoint !== undefined)
@@ -196,8 +210,8 @@ export class ClimateDevice implements IBaseDevice<ClimateIncrement, ClimateIncre
                 targetSetpoint: setpoint,
             };
         })
-        .filter(exists)
-        .filter(byUniqueDelta());
+            .filter(exists)
+            .filter(byUniqueDelta());
 
         // Handle mode transitions to fan-only (only when no comfort setpoint specified)
         const fanOnlyIncrements = [];
@@ -526,7 +540,7 @@ function range(start: number, end: number, step: number): number[] {
 
 function byUniqueDelta() {
     const seenDeltas = new Set<number>();
-    return ({delta}: {delta: number}) => {
+    return ({ delta }: { delta: number }) => {
         const isSeen = seenDeltas.has(delta);
         seenDeltas.add(delta);
         return !isSeen;

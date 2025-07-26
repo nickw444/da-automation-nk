@@ -93,6 +93,7 @@ describe("DeviceLoadManager", () => {
   it("should shed load using devices with negative delta decrements", () => {
     // Set grid consumption high to trigger load shedding
     mockGridSensorMean.state = 900; // Exceeds max of 800W
+    mockGridSensor.state = 900; // Exceeds max of 800W
 
     // Start the load manager and trigger one loop iteration
     deviceLoadManager.start();
@@ -109,6 +110,7 @@ describe("DeviceLoadManager", () => {
   it("should only shed appropriate amount when negative deltas are available", () => {
     // Set grid consumption slightly high to trigger small load shedding
     mockGridSensorMean.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
+    mockGridSensor.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
 
     deviceLoadManager.start();
     vi.advanceTimersByTime(LOOP_INTERVAL);
@@ -119,23 +121,26 @@ describe("DeviceLoadManager", () => {
     expect(mockDevices[0].decreaseConsumptionBy).not.toHaveBeenCalled();
   });
 
-  it("should skip devices with no suitable negative delta decrements", () => {
+  it("should decrease consumption with overfitted negative delta decrements", () => {
     // Set a small overage that no device can handle
     mockGridSensorMean.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
-
+    mockGridSensor.state = 850; // Exceeds max of 800W, need to shed 350W (850 - 500)
+    
     // Create devices with decrements larger than needed
     const deviceWithLargeDecrement1 = {
       ...mockDevices[1],
-      decreaseIncrements: [{ delta: -400 }], // Too large
+      priority: 3,
+      decreaseIncrements: [{ delta: -250 }, { delta: -400 }, { delta: -500 }], // -250 wont cover, 400 is large enough.
     };
     const deviceWithLargeDecrement2 = {
       ...mockDevices[2],
+      priority: 2,
       decreaseIncrements: [{ delta: -500 }], // Too large
     };
 
     // Create a new device manager with these devices
     const testDeviceManager = new DeviceLoadManager(
-      [mockDevices[0], deviceWithLargeDecrement1, deviceWithLargeDecrement2],
+      [deviceWithLargeDecrement1, deviceWithLargeDecrement2],
       mockLogger,
       mockGridSensor,
       mockGridSensorMean,
@@ -148,12 +153,15 @@ describe("DeviceLoadManager", () => {
     vi.advanceTimersByTime(LOOP_INTERVAL);
 
     // No devices should be called since their decrements are too large
-    expect(deviceWithLargeDecrement1.decreaseConsumptionBy).not.toHaveBeenCalled();
+    expect(deviceWithLargeDecrement1.decreaseConsumptionBy).toHaveBeenCalledWith({
+      delta: -400,
+    });
     expect(deviceWithLargeDecrement2.decreaseConsumptionBy).not.toHaveBeenCalled();
   });
 
   it("should shed load from appropriate devices when exceeding max consumption", () => {
     mockGridSensorMean.state = 900;
+    mockGridSensor.state = 900;
 
     deviceLoadManager.start();
     vi.advanceTimersByTime(LOOP_INTERVAL);
@@ -165,6 +173,7 @@ describe("DeviceLoadManager", () => {
 
   it("should handle devices with pending changes correctly", () => {
     mockGridSensorMean.state = 900;
+    mockGridSensor.state = 900;
 
     // Create device with pending changes
     const deviceWithPendingChanges = {
@@ -183,6 +192,7 @@ describe("DeviceLoadManager", () => {
 
   it("should handle devices in debounce state correctly", () => {
     mockGridSensorMean.state = 900;
+    mockGridSensor.state = 900;
 
     // Create device in debounce state
     const deviceInDebounce = {
@@ -201,6 +211,7 @@ describe("DeviceLoadManager", () => {
 
   it("should skip devices with management disabled during load shedding", () => {
     mockGridSensorMean.state = 900; // Exceeds max of 800W
+    mockGridSensor.state = 900;
 
     // Create device with management disabled
     const deviceWithManagementDisabled = {
@@ -267,6 +278,7 @@ describe("DeviceLoadManager", () => {
     it("should add load when grid consumption is below min threshold", () => {
       // Set grid consumption low to trigger load adding
       mockGridSensorMean.state = 100; // Below min of 200W
+      mockGridSensor.state = 100;
 
       deviceLoadManager.start();
       vi.advanceTimersByTime(LOOP_INTERVAL);
@@ -279,6 +291,7 @@ describe("DeviceLoadManager", () => {
 
     it("should add load to highest priority devices first", () => {
       mockGridSensorMean.state = 150; // Below min of 200W, need 350W (500 - 150)
+      mockGridSensor.state = 150;
 
       deviceLoadManager.start();
       vi.advanceTimersByTime(LOOP_INTERVAL);
@@ -290,6 +303,7 @@ describe("DeviceLoadManager", () => {
 
     it("should account for devices with pending increase changes", () => {
       mockGridSensorMean.state = 100; // Below min, need 400W total
+      mockGridSensor.state = 100;
 
       // Create device with pending increase
       const deviceWithPending = {
@@ -309,6 +323,7 @@ describe("DeviceLoadManager", () => {
 
     it("should skip devices with pending decrease changes", () => {
       mockGridSensorMean.state = 100;
+      mockGridSensor.state = 100;
 
       // Create device with pending decrease
       const deviceWithPendingDecrease = {
@@ -327,6 +342,7 @@ describe("DeviceLoadManager", () => {
 
     it("should find best fitting increment for load adding", () => {
       mockGridSensorMean.state = 150; // Below min of 200W, need 350W (500 - 150)
+      mockGridSensor.state = 150;
 
       // Create device with multiple increment options - should pick largest that fits
       const deviceWithMultipleIncrements = {
@@ -355,6 +371,7 @@ describe("DeviceLoadManager", () => {
 
     it("should right-size load addition across multiple devices when high priority increments don't fit", () => {
       mockGridSensorMean.state = 150; // Below min of 200W, need 350W surplus (500 - 150)
+      mockGridSensor.state = 150;
 
       // Create test scenario: Air Conditioner (Priority 1), Germination Light (Priority 2), 
       // Subfloor Fan (Priority 3), Heated Towel Rail (Priority 4)
@@ -445,6 +462,7 @@ describe("DeviceLoadManager", () => {
 
     it("should skip devices with management disabled during load adding", () => {
       mockGridSensorMean.state = 100; // Below min of 200W
+      mockGridSensor.state = 100;
 
       // Create device with management disabled
       const deviceWithManagementDisabled = {
@@ -465,6 +483,7 @@ describe("DeviceLoadManager", () => {
 
     it("should skip devices with management disabled when accounting for pending increases", () => {
       mockGridSensorMean.state = 180; // Below min of 200W, need 320W total
+      mockGridSensor.state = 180;
 
       // Create a third device that requires exactly 240W (would only fit if Device1's pending 100W is NOT counted)
       const device3 = {
@@ -507,10 +526,10 @@ describe("DeviceLoadManager", () => {
 
       // Device1 should be skipped (management disabled)
       expect(deviceWithManagementDisabled.increaseConsumptionBy).not.toHaveBeenCalled();
-      
+
       // Device2 should be called (80W fits in 320W surplus)
       expect(mockDevices[1].increaseConsumptionBy).toHaveBeenCalledWith({ delta: 80 });
-      
+
       // Device3 should be called (240W fits in remaining 240W since Device1's pending increase wasn't counted)
       // If Device1's pending increase WAS counted, only 140W would remain (320W - 100W pending - 80W = 140W < 240W)
       expect(device3.increaseConsumptionBy).toHaveBeenCalledWith({ delta: 240 });
@@ -521,6 +540,7 @@ describe("DeviceLoadManager", () => {
     it("should take no action when consumption is within acceptable range", () => {
       // Set consumption within range (between 200 and 800)
       mockGridSensorMean.state = 500; // Exactly at desired, within range
+      mockGridSensor.state = 500;
 
       deviceLoadManager.start();
       vi.advanceTimersByTime(LOOP_INTERVAL);
@@ -538,7 +558,8 @@ describe("DeviceLoadManager", () => {
   describe("Error Handling", () => {
     it("should handle null grid consumption gracefully", () => {
       mockGridSensorMean.state = null;
-
+      mockGridSensor.state = null;
+      
       deviceLoadManager.start();
       vi.advanceTimersByTime(LOOP_INTERVAL);
 

@@ -99,7 +99,7 @@ const devices: DeviceConfig[] = [
       consumptionPerDegree: 300,
       maxCompressorConsumption: 2400,
       fanOnlyMinConsumption: 200,
-      heatCoolMinConsumption: 500,
+      heatCoolMinConsumption: 250,
 
       // Timing Configuration
       setpointChangeTransitionMs: 60_000,  // 1 minute for consumption to stabilize after setpoint change
@@ -204,7 +204,7 @@ export const config: Config = {
   pvProductionActivationThreshold: 600,
   pvProductionActivationDelayMs: 15 * 60 * 1000, // 15 minutes
 
-  maxConsumptionBeforeSheddingLoad: 250,
-  minConsumptionBeforeAddingLoad: -400,
+  maxConsumptionBeforeSheddingLoad: 150,
+  minConsumptionBeforeAddingLoad: -450,
   desiredGridConsumption: -300,
 };

@@ -41,12 +41,15 @@ export class DeviceLoadManager {
     const gridConsumption = unwrapNumericState(
       this.gridConsumptionSensorMean1m.state,
     );
-    if (gridConsumption == null) {
+    const gridConsumptionNow = unwrapNumericState(
+      this.gridConsumptionSensor.state,
+    );
+    if (gridConsumption == null || gridConsumptionNow == null) {
       this.logger.warn("Grid consumption is null, skipping load management");
       return;
     }
 
-    this.logger.info(`Current grid consumption: ${gridConsumption} W`);
+    this.logger.info(`Current grid consumption: ${gridConsumption} W (mean 1m) / ${gridConsumptionNow} W`);
 
     // Bangbang control logic
     if (gridConsumption > this.maxConsumptionBeforeSheddingLoad) {
@@ -54,13 +57,13 @@ export class DeviceLoadManager {
       this.logger.info(
         `Grid consumption ${gridConsumption} W exceeds max ${this.maxConsumptionBeforeSheddingLoad} W, shedding load`,
       );
-      this.shedLoad(gridConsumption - this.desiredGridConsumption);
+      this.shedLoad(Math.max(gridConsumption, gridConsumptionNow) - this.desiredGridConsumption);
     } else if (gridConsumption < this.minConsumptionBeforeAddingLoad) {
       // Surplus production - add load
       this.logger.info(
         `Grid consumption ${gridConsumption} W is below min ${this.minConsumptionBeforeAddingLoad} W, adding load`,
       );
-      this.addLoad(this.desiredGridConsumption - gridConsumption);
+      this.addLoad(this.desiredGridConsumption - Math.max(gridConsumption, gridConsumptionNow));
     } else {
       // Within acceptable range - no action needed
       this.logger.info(
@@ -120,13 +123,16 @@ export class DeviceLoadManager {
         continue;
       }
 
-      // Find the best fitting increment that doesn't exceed remainingToAdd
-      const allIncrements = device.decreaseIncrements;
-      const suitableIncrements = allIncrements
-        .filter(increment => Math.abs(increment.delta) <= remainingToShed)
+      const allIncrements = [...device.decreaseIncrements]
         .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-      if (suitableIncrements.length > 0) {
-        const suitableIncrement = suitableIncrements[0]; // Pick the largest suitable increment
+      const largestFittingIndex = allIncrements.findIndex(increment => Math.abs(increment.delta) <= remainingToShed);
+      const largest = allIncrements[largestFittingIndex];
+
+      if (allIncrements.length > 0) {
+        // Pick smallest increment which outsizes remainingToShed, otherwise shed largest amount.
+        const suitableIncrement = largestFittingIndex !== -1  && largestFittingIndex > 0
+          ? allIncrements[largestFittingIndex - 1]
+          : allIncrements[0];
         this.logger.info(` • Shedding ${suitableIncrement.delta} W from ${device.name}`);
         device.decreaseConsumptionBy(suitableIncrement);
         remainingToShed += suitableIncrement.delta; // delta is negative, so add to remaining.
